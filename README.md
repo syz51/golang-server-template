@@ -8,7 +8,7 @@ A production-ready Go server template using Echo, Viper, and Validator v10, foll
 - [Project Structure](#-project-structure)
 - [Requirements](#-requirements)
 - [Quick Start](#-quick-start)
-- [Configuration](#-configuration)
+- [Configuration](#%EF%B8%8F-configuration)
 - [API Endpoints](#-api-endpoints)
 - [Development](#-development)
 - [Testing](#-testing)
