@@ -4,16 +4,16 @@ A production-ready Go server template using Echo, Viper, and Validator v10, foll
 
 ## 📋 Table of Contents
 
-- [Features](#features)
-- [Project Structure](#project-structure)
-- [Requirements](#requirements)
-- [Quick Start](#quick-start)
-- [Configuration](#configuration)
-- [API Endpoints](#api-endpoints)
-- [Development](#development)
-- [Testing](#testing)
-- [Deployment](#deployment)
-- [Contributing](#contributing)
+- [Features](#-features)
+- [Project Structure](#-project-structure)
+- [Requirements](#-requirements)
+- [Quick Start](#-quick-start)
+- [Configuration](#-configuration)
+- [API Endpoints](#-api-endpoints)
+- [Development](#-development)
+- [Testing](#-testing)
+- [Deployment](#-deployment)
+- [Contributing](#-contributing)
 
 ## ✨ Features
 
@@ -49,12 +49,9 @@ A production-ready Go server template using Echo, Viper, and Validator v10, foll
 │       └── user.go          # Business logic
 ├── configs/
 │   └── config.yaml          # Configuration file
-├── scripts/                 # Build and deployment scripts
-├── .air.toml               # Air configuration for hot reload
 ├── .env.example            # Environment variables example
 ├── .gitignore             # Git ignore file
 ├── Dockerfile             # Docker configuration
-├── Makefile              # Development commands
 ├── go.mod                # Go modules
 ├── go.sum                # Go modules checksum
 └── README.md             # This file
@@ -69,6 +66,7 @@ A production-ready Go server template using Echo, Viper, and Validator v10, foll
 ## 🚀 Quick Start
 
 1. **Clone the template**:
+
    ```bash
    # Using gonew (recommended)
    gonew github.com/your-org/your-project my-new-project
@@ -80,6 +78,7 @@ A production-ready Go server template using Echo, Viper, and Validator v10, foll
    ```
 
 2. **Update module name**:
+
    ```bash
    # Replace "github.com/your-org/your-project" with your actual module path
    go mod edit -module github.com/your-username/your-project
@@ -87,16 +86,19 @@ A production-ready Go server template using Echo, Viper, and Validator v10, foll
    ```
 
 3. **Install dependencies**:
+
    ```bash
    go mod download
    ```
 
 4. **Run the application**:
+
    ```bash
    go run cmd/server/main.go
    ```
 
 5. **Test the API**:
+
    ```bash
    curl http://localhost:8080/health
    ```
@@ -155,6 +157,7 @@ GET /health
 ```
 
 Response:
+
 ```json
 {
   "status": "ok",
@@ -171,6 +174,7 @@ Response:
 ### Users API
 
 #### Create User
+
 ```http
 POST /api/v1/users
 Content-Type: application/json
@@ -185,11 +189,13 @@ Content-Type: application/json
 ```
 
 #### Get User
+
 ```http
 GET /api/v1/users/{id}
 ```
 
 #### Update User
+
 ```http
 PUT /api/v1/users/{id}
 Content-Type: application/json
@@ -201,11 +207,13 @@ Content-Type: application/json
 ```
 
 #### Delete User
+
 ```http
 DELETE /api/v1/users/{id}
 ```
 
 #### List Users
+
 ```http
 GET /api/v1/users?page=1&per_page=10
 ```
@@ -282,6 +290,7 @@ CGO_ENABLED=0 GOOS=linux go build -a -ldflags '-w -s' -o server cmd/server/main.
 ### Adding a New Entity
 
 1. **Create model** in `internal/model/`:
+
    ```go
    type YourEntity struct {
        ID   int    `json:"id" validate:"-"`
@@ -290,6 +299,7 @@ CGO_ENABLED=0 GOOS=linux go build -a -ldflags '-w -s' -o server cmd/server/main.
    ```
 
 2. **Create service** in `internal/service/`:
+
    ```go
    type YourEntityService struct {
        // business logic
@@ -297,6 +307,7 @@ CGO_ENABLED=0 GOOS=linux go build -a -ldflags '-w -s' -o server cmd/server/main.
    ```
 
 3. **Create handlers** in `internal/handler/`:
+
    ```go
    func (h *Handler) CreateYourEntity(c echo.Context) error {
        // handler logic
@@ -304,6 +315,7 @@ CGO_ENABLED=0 GOOS=linux go build -a -ldflags '-w -s' -o server cmd/server/main.
    ```
 
 4. **Add routes** in `cmd/server/main.go`:
+
    ```go
    entities := api.Group("/entities")
    entities.POST("", h.CreateYourEntity)
@@ -341,4 +353,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [Echo](https://echo.labstack.com/) - High performance, minimalist Go web framework
 - [Viper](https://github.com/spf13/viper) - Go configuration with fangs
 - [Validator](https://github.com/go-playground/validator) - Go Struct and Field validation
-- [Air](https://github.com/cosmtrek/air) - Live reload for Go apps 
+- [Air](https://github.com/cosmtrek/air) - Live reload for Go apps
