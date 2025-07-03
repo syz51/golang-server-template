@@ -1,6 +1,6 @@
 # Go Server Template
 
-A production-ready Go server template using Echo, Viper, and Validator v10, following Go best practices for project layout.
+An opinionated production-ready Go server template using Echo, Viper, and Validator v10, following Go best practices for project layout.
 
 ## 📋 Table of Contents
 
@@ -14,6 +14,7 @@ A production-ready Go server template using Echo, Viper, and Validator v10, foll
 - [Testing](#-testing)
 - [Deployment](#-deployment)
 - [Contributing](#-contributing)
+- [Acknowledgments](#-acknowledgments)
 
 ## ✨ Features
 
@@ -21,8 +22,9 @@ A production-ready Go server template using Echo, Viper, and Validator v10, foll
 - **Viper Configuration**: Flexible configuration management with support for multiple formats
 - **Validator v10**: Comprehensive struct and field validation
 - **Clean Architecture**: Following Go project layout best practices
-- **Docker Support**: Ready-to-use Dockerfile for containerization
+- **Docker Support**: Multi-stage builds with Google's distroless images for enhanced security and minimal footprint
 - **Hot Reload**: Air integration for development
+- **Debugging Support**: Integrated Delve debugger with Air for seamless debugging experience
 - **Testing**: Example unit tests with testify
 - **Graceful Shutdown**: Proper server shutdown handling
 - **Middleware**: Built-in middleware for logging, recovery, CORS, etc.
@@ -49,12 +51,13 @@ A production-ready Go server template using Echo, Viper, and Validator v10, foll
 │       └── user.go          # Business logic
 ├── configs/
 │   └── config.yaml          # Configuration file
-├── .env.example            # Environment variables example
-├── .gitignore             # Git ignore file
-├── Dockerfile             # Docker configuration
-├── go.mod                # Go modules
-├── go.sum                # Go modules checksum
-└── README.md             # This file
+├── .env.example             # Environment variables example
+├── .gitignore               # Git ignore file
+├── .air.toml                # Configuration file for air
+├── Dockerfile               # Docker configuration
+├── go.mod                   # Go modules
+├── go.sum                   # Go modules checksum
+└── README.md                # This file
 ```
 
 ## 🔧 Requirements
@@ -239,12 +242,76 @@ air                                   # Run with hot reload (requires air)
 Install Air for hot reloading:
 
 ```bash
-# Install Air
-go install github.com/cosmtrek/air@latest
+# Install Air version 1.61.7, until https://github.com/air-verse/air/issues/775 is fixed
+go install github.com/cosmtrek/air@1.61.7
 
 # Run with hot reload
 air
 ```
+
+### Debugging (Optional)
+
+This project is configured to support debugging through Delve when using Air. The setup allows you to attach a debugger while enjoying hot reload functionality.
+
+#### Prerequisites
+
+Install Delve if you haven't already:
+
+```bash
+go install github.com/go-delve/delve/cmd/dlv@latest
+```
+
+#### Usage
+
+When you run `air`, the application starts with Delve debugging enabled and listens on port `2345`. You can attach your debugger to this port.
+
+**VS Code Setup:**
+
+Add this configuration to your `.vscode/launch.json`:
+
+```json
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Attach to Air",
+            "type": "go",
+            "request": "attach",
+            "mode": "remote",
+            "remotePath": "${workspaceFolder}",
+            "port": 2345,
+            "host": "127.0.0.1"
+        }
+    ]
+}
+```
+
+**GoLand/IntelliJ Setup:**
+
+1. Go to **Run** → **Edit Configurations**
+2. Add **Go Remote** configuration
+3. Set **Host**: `127.0.0.1`
+4. Set **Port**: `2345`
+
+**Steps:**
+
+1. Start the development server:
+
+   ```bash
+   air
+   ```
+
+2. Set your breakpoints in your Go code
+
+3. Attach your debugger using the configuration above
+
+4. The debugger will connect and you can debug while Air handles hot reloading
+
+#### Notes
+
+- The debug server accepts multiple client connections (`--accept-multiclient`)
+- Air will rebuild and restart the debug session on file changes
+- You may need to reconnect your debugger after hot reloads
 
 ## 🧪 Testing
 
@@ -270,11 +337,129 @@ go test -v ./internal/handler
 
 ### Docker
 
+This project uses a **multi-stage Docker build** with **Google's distroless images** for optimal security, performance, and image size.
+
+#### Docker Build Features
+
+- **Multi-stage build**: Separates build environment from runtime environment
+- **Distroless base image**: `gcr.io/distroless/static-debian12:nonroot` for minimal attack surface
+- **Build caching**: Optimized layer caching for faster builds
+- **Non-root user**: Runs as non-privileged user for enhanced security
+- **Static binary**: CGO-disabled build for maximum compatibility
+
+#### Quick Start
+
 Build and run with Docker:
 
 ```bash
+# Build the image
 docker build -t golang-server-template .
+
+# Run with environment file
 docker run -p 8080:8080 --env-file .env golang-server-template
+
+# Run with environment variables
+docker run -p 8080:8080 \
+  -e APP_SERVER_PORT=8080 \
+  -e APP_DATABASE_HOST=localhost \
+  golang-server-template
+```
+
+#### Advanced Docker Commands
+
+```bash
+# Build with custom tag
+docker build -t your-registry/golang-server-template:v1.0.0 .
+
+# Run with volume mount for configs
+docker run -p 8080:8080 \
+  -v $(pwd)/configs:/app/configs:ro \
+  golang-server-template
+
+# Run with custom network
+docker network create app-network
+docker run -p 8080:8080 \
+  --network app-network \
+  --name golang-server \
+  golang-server-template
+
+# View container logs
+docker logs golang-server
+
+# Execute shell in running container (for debugging)
+docker exec -it golang-server sh
+```
+
+#### Docker Compose (Optional)
+
+Create a `docker-compose.yml` for local development:
+
+```yaml
+version: '3.8'
+services:
+  app:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      - APP_SERVER_PORT=8080
+      - APP_DATABASE_HOST=postgres
+    depends_on:
+      - postgres
+    volumes:
+      - ./configs:/app/configs:ro
+  
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=app_db
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
+```
+
+Run with Docker Compose:
+
+```bash
+docker-compose up -d
+```
+
+#### Distroless Benefits
+
+**Security Advantages:**
+
+- No shell, package managers, or unnecessary binaries
+- Minimal attack surface with only essential runtime dependencies
+- Non-root user execution
+- No known CVEs from base OS packages
+
+**Performance Benefits:**
+
+- Smaller image size (~15-20MB vs ~100MB+ with full OS)
+- Faster container startup and deployment
+- Reduced bandwidth for image pulls
+- Lower memory footprint
+
+**Production Considerations:**
+
+- Debugging requires tools like `docker exec` with debug containers
+- No shell access (use `kubectl debug` or `docker run --rm -it --pid container:xyz --net container:xyz --cap-add SYS_PTRACE nicolaka/netshoot` for debugging)
+
+#### Image Size Comparison
+
+```bash
+# Check final image size
+docker images golang-server-template
+
+# Expected output:
+# REPOSITORY              TAG       SIZE
+# golang-server-template  latest    ~15-20MB
 ```
 
 ### Production Build
@@ -354,3 +539,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [Viper](https://github.com/spf13/viper) - Go configuration with fangs
 - [Validator](https://github.com/go-playground/validator) - Go Struct and Field validation
 - [Air](https://github.com/cosmtrek/air) - Live reload for Go apps
+- [Delve](https://github.com/go-delve/delve) - Debugger for the Go programming language

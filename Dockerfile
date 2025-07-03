@@ -1,32 +1,24 @@
 # Build stage
 FROM golang:1.24-alpine AS builder
 
-# Install necessary packages
-RUN apk add --no-cache git ca-certificates tzdata
-
 # Set working directory
 WORKDIR /app
 
-# Copy go mod files
-COPY go.mod go.sum ./
-
-# Download dependencies
-RUN go mod download
+ENV GOCACHE=/root/.cache/go-build
 
 # Copy source code
 COPY . .
 
 # Build the application
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o server cmd/server/main.go
+RUN --mount=type=cache,target=/go/pkg/mod/ \
+    --mount=type=cache,target="/root/.cache/go-build" \
+    CGO_ENABLED=0 GOOS=linux go build -a -o server cmd/server/main.go
 
 # Final stage
-FROM alpine:latest
-
-# Install ca-certificates for HTTPS requests
-RUN apk --no-cache add ca-certificates
+FROM gcr.io/distroless/static-debian12:nonroot
 
 # Create app directory
-WORKDIR /root/
+WORKDIR /app
 
 # Copy the binary from builder stage
 COPY --from=builder /app/server .
@@ -38,4 +30,4 @@ COPY --from=builder /app/configs ./configs
 EXPOSE 8080
 
 # Command to run
-CMD ["./server"] 
+CMD ["/app/server"] 

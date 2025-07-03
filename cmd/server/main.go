@@ -46,8 +46,8 @@ func main() {
 
 	// Start server
 	go func() {
-		addr := fmt.Sprintf(":%d", cfg.Server.Port)
-		log.Printf("Server starting on port %d", cfg.Server.Port)
+		addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
+		log.Printf("Server starting on %s", addr)
 		if err := e.Start(addr); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("Failed to start server: %v", err)
 		}
