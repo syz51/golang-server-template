@@ -65,6 +65,7 @@ An opinionated production-ready Go server template using Echo, Viper, and Valida
 - Go 1.24 or higher
 - Docker (optional, for containerization)
 - Air (optional, for hot reload)
+- Delve (optional, for debugging)
 
 ## 🚀 Quick Start
 
@@ -72,35 +73,27 @@ An opinionated production-ready Go server template using Echo, Viper, and Valida
 
    ```bash
    # Using gonew (recommended)
-   gonew github.com/your-org/your-project my-new-project
+   gonew github.com/syz51/golang-server-template my-new-project
    cd my-new-project
    
    # Or clone directly
-   git clone https://github.com/your-org/your-project.git
+   git clone https://github.com/syz51/golang-server-template.git
    cd your-project
    ```
 
-2. **Update module name**:
-
-   ```bash
-   # Replace "github.com/your-org/your-project" with your actual module path
-   go mod edit -module github.com/your-username/your-project
-   find . -type f -name "*.go" -exec sed -i 's|github.com/your-org/your-project|github.com/your-username/your-project|g' {} +
-   ```
-
-3. **Install dependencies**:
+2. **Install dependencies**:
 
    ```bash
    go mod download
    ```
 
-4. **Run the application**:
+3. **Run the application**:
 
    ```bash
    go run cmd/server/main.go
    ```
 
-5. **Test the API**:
+4. **Test the API**:
 
    ```bash
    curl http://localhost:8080/health
