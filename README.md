@@ -69,31 +69,53 @@ An opinionated production-ready Go server template using Echo, Viper, and Valida
 
 ## 🚀 Quick Start
 
+### Important: Module Naming
+
+When using `gonew`, you **must** provide a valid Go module name that includes a domain name (with a dot). Examples of valid module names:
+
+- `github.com/your-username/project-name`
+- `example.com/project-name`
+- `mycompany.com/project-name`
+
+Invalid names like `my-project` or `project-name` will result in an error: `missing dot in first path element`.
+
 1. **Clone the template**:
 
    ```bash
-   # Using gonew (recommended)
-   gonew github.com/syz51/golang-server-template my-new-project
+   # Using gonew (recommended) - replace "your-username" with your actual GitHub username
+   gonew github.com/syz51/golang-server-template github.com/your-username/my-new-project
+   cd my-new-project
+   
+   # Or using a custom domain
+   gonew github.com/syz51/golang-server-template example.com/my-new-project
    cd my-new-project
    
    # Or clone directly
    git clone https://github.com/syz51/golang-server-template.git
-   cd your-project
+   cd golang-server-template
    ```
 
-2. **Install dependencies**:
+2. **Update module name**:
+
+   ```bash
+   # Replace "github.com/your-org/your-project" with your actual module path
+   go mod edit -module github.com/your-username/your-project
+   find . -type f -name "*.go" -exec sed -i 's|github.com/your-org/your-project|github.com/your-username/your-project|g' {} +
+   ```
+
+3. **Install dependencies**:
 
    ```bash
    go mod download
    ```
 
-3. **Run the application**:
+4. **Run the application**:
 
    ```bash
    go run cmd/server/main.go
    ```
 
-4. **Test the API**:
+5. **Test the API**:
 
    ```bash
    curl http://localhost:8080/health
