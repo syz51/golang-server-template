@@ -1,6 +1,8 @@
 package model
 
 import (
+	"reflect"
+	"strings"
 	"time"
 
 	"github.com/go-playground/validator/v10"
@@ -34,7 +36,7 @@ type UpdateUserRequest struct {
 	FirstName *string `json:"first_name,omitempty" validate:"omitempty,min=2,max=50" example:"John"`
 	LastName  *string `json:"last_name,omitempty" validate:"omitempty,min=2,max=50" example:"Doe"`
 	Age       *int    `json:"age,omitempty" validate:"omitempty,min=1,max=150" example:"25"`
-	Phone     *string `json:"phone,omitempty" validate:"omitempty,e164" example:"+1234567890"`
+	Phone     *string `json:"phone,omitempty" validate:"omitnil,optional_e164" example:"+1234567890"`
 	Status    *string `json:"status,omitempty" validate:"omitempty,oneof=active inactive suspended" example:"active"`
 }
 
@@ -60,11 +62,10 @@ type ErrorResponse struct {
 
 // HealthResponse represents the health check response
 type HealthResponse struct {
-	Status    string            `json:"status" example:"ok"`
-	Service   string            `json:"service" example:"golang-server-template"`
-	Version   string            `json:"version" example:"1.0.0"`
-	Timestamp time.Time         `json:"timestamp"`
-	Checks    map[string]string `json:"checks,omitempty"`
+	Status    string    `json:"status" example:"ok"`
+	Service   string    `json:"service" example:"golang-server-template"`
+	Version   string    `json:"version" example:"1.0.0"`
+	Timestamp time.Time `json:"timestamp"`
 }
 
 // Validator instance
@@ -72,6 +73,12 @@ var validate *validator.Validate
 
 func init() {
 	validate = validator.New()
+	validate.RegisterValidation("optional_e164", func(fl validator.FieldLevel) bool {
+		return fl.Field().String() == "" || validate.Var(fl.Field().String(), "e164") == nil
+	})
+	validate.RegisterTagNameFunc(func(field reflect.StructField) string {
+		return strings.SplitN(field.Tag.Get("json"), ",", 2)[0]
+	})
 }
 
 // ValidateStruct validates a struct using the validator tags
@@ -95,12 +102,20 @@ func GetValidationErrors(err error) map[string]string {
 			case "email":
 				errors[field] = "Must be a valid email address"
 			case "min":
-				errors[field] = "Must be at least " + param + " characters long"
+				if fieldError.Kind() == reflect.Int {
+					errors[field] = "Must be at least " + param
+				} else {
+					errors[field] = "Must be at least " + param + " characters long"
+				}
 			case "max":
-				errors[field] = "Must be at most " + param + " characters long"
+				if fieldError.Kind() == reflect.Int {
+					errors[field] = "Must be at most " + param
+				} else {
+					errors[field] = "Must be at most " + param + " characters long"
+				}
 			case "oneof":
 				errors[field] = "Must be one of: " + param
-			case "e164":
+			case "e164", "optional_e164":
 				errors[field] = "Must be a valid phone number in E164 format"
 			default:
 				errors[field] = "Invalid value"

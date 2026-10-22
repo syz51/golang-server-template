@@ -1,13 +1,15 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
+	"net/url"
 	"strconv"
 	"time"
 
-	"github.com/your-org/your-project/internal/config"
-	"github.com/your-org/your-project/internal/model"
-	"github.com/your-org/your-project/internal/service"
+	"github.com/syz51/golang-server-template/internal/config"
+	"github.com/syz51/golang-server-template/internal/model"
+	"github.com/syz51/golang-server-template/internal/service"
 
 	"github.com/labstack/echo/v5"
 )
@@ -33,10 +35,6 @@ func (h *Handler) Health(c *echo.Context) error {
 		Service:   h.config.App.Name,
 		Version:   h.config.App.Version,
 		Timestamp: time.Now(),
-		Checks: map[string]string{
-			"database": "ok", // In a real app, you'd check database connectivity
-			"memory":   "ok",
-		},
 	}
 
 	return c.JSON(http.StatusOK, response)
@@ -47,9 +45,7 @@ func (h *Handler) CreateUser(c *echo.Context) error {
 	var req model.CreateUserRequest
 
 	if err := c.Bind(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, model.ErrorResponse{
-			Error: "Invalid request payload",
-		})
+		return bindingError(c, err)
 	}
 
 	if err := model.ValidateStruct(&req); err != nil {
@@ -61,9 +57,7 @@ func (h *Handler) CreateUser(c *echo.Context) error {
 
 	user, err := h.userService.CreateUser(&req)
 	if err != nil {
-		return c.JSON(http.StatusConflict, model.ErrorResponse{
-			Error: err.Error(),
-		})
+		return serviceError(c, err)
 	}
 
 	return c.JSON(http.StatusCreated, user)
@@ -81,9 +75,7 @@ func (h *Handler) GetUser(c *echo.Context) error {
 
 	user, err := h.userService.GetUser(id)
 	if err != nil {
-		return c.JSON(http.StatusNotFound, model.ErrorResponse{
-			Error: err.Error(),
-		})
+		return serviceError(c, err)
 	}
 
 	return c.JSON(http.StatusOK, user)
@@ -101,9 +93,7 @@ func (h *Handler) UpdateUser(c *echo.Context) error {
 
 	var req model.UpdateUserRequest
 	if err := c.Bind(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, model.ErrorResponse{
-			Error: "Invalid request payload",
-		})
+		return bindingError(c, err)
 	}
 
 	if err := model.ValidateStruct(&req); err != nil {
@@ -115,16 +105,7 @@ func (h *Handler) UpdateUser(c *echo.Context) error {
 
 	user, err := h.userService.UpdateUser(id, &req)
 	if err != nil {
-		status := http.StatusInternalServerError
-		if err.Error() == "user not found" {
-			status = http.StatusNotFound
-		} else if err.Error() == "email already exists" {
-			status = http.StatusConflict
-		}
-
-		return c.JSON(status, model.ErrorResponse{
-			Error: err.Error(),
-		})
+		return serviceError(c, err)
 	}
 
 	return c.JSON(http.StatusOK, user)
@@ -141,9 +122,7 @@ func (h *Handler) DeleteUser(c *echo.Context) error {
 	}
 
 	if err := h.userService.DeleteUser(id); err != nil {
-		return c.JSON(http.StatusNotFound, model.ErrorResponse{
-			Error: err.Error(),
-		})
+		return serviceError(c, err)
 	}
 
 	return c.NoContent(http.StatusNoContent)
@@ -151,31 +130,58 @@ func (h *Handler) DeleteUser(c *echo.Context) error {
 
 // ListUsers returns a paginated list of users
 func (h *Handler) ListUsers(c *echo.Context) error {
-	// Parse query parameters
-	pageParam := c.QueryParam("page")
-	perPageParam := c.QueryParam("per_page")
-
-	page := 1
-	perPage := 10
-
-	if pageParam != "" {
-		if p, err := strconv.Atoi(pageParam); err == nil && p > 0 {
-			page = p
-		}
+	query, err := url.ParseQuery(c.Request().URL.RawQuery)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, model.ErrorResponse{Error: "Invalid query parameters"})
 	}
-
-	if perPageParam != "" {
-		if pp, err := strconv.Atoi(perPageParam); err == nil && pp > 0 && pp <= 100 {
-			perPage = pp
+	page, perPage := 1, 10
+	for name, target := range map[string]*int{"page": &page, "per_page": &perPage} {
+		if values, present := query[name]; present {
+			if len(values) != 1 {
+				return c.JSON(http.StatusBadRequest, model.ErrorResponse{Error: "Invalid " + name})
+			}
+			value, err := strconv.Atoi(values[0])
+			if err != nil {
+				return c.JSON(http.StatusBadRequest, model.ErrorResponse{Error: "Invalid " + name})
+			}
+			*target = value
 		}
 	}
 
 	response, err := h.userService.ListUsers(page, perPage)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, model.ErrorResponse{
-			Error: err.Error(),
-		})
+		return serviceError(c, err)
 	}
 
 	return c.JSON(http.StatusOK, response)
+}
+
+// bindingError preserves transport errors raised while reading a limited body.
+func bindingError(c *echo.Context, err error) error {
+	status := echo.StatusCode(err)
+	var maxBytesError *http.MaxBytesError
+	if errors.As(err, &maxBytesError) {
+		status = http.StatusRequestEntityTooLarge
+	}
+	if status != http.StatusRequestEntityTooLarge && status != http.StatusUnsupportedMediaType {
+		status = http.StatusBadRequest
+	}
+	message := "Invalid request payload"
+	if status != http.StatusBadRequest {
+		message = http.StatusText(status)
+	}
+	return c.JSON(status, model.ErrorResponse{Error: message})
+}
+
+func serviceError(c *echo.Context, err error) error {
+	status := http.StatusInternalServerError
+	switch {
+	case errors.Is(err, service.ErrUserNotFound):
+		status = http.StatusNotFound
+	case errors.Is(err, service.ErrEmailExists):
+		status = http.StatusConflict
+	case errors.Is(err, service.ErrInvalidPagination):
+		status = http.StatusBadRequest
+	}
+	return c.JSON(status, model.ErrorResponse{Error: err.Error()})
 }

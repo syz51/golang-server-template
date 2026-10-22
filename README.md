@@ -1,561 +1,189 @@
 # Go Server Template
 
-An opinionated production-ready Go server template using Echo v5, Viper, and Validator v10, following Go best practices for project layout.
+An Echo v5 HTTP server starter with validated configuration, structured logging, request limits, graceful shutdown, tests, and a non-root Docker image. Generate a new Go module with `gonew`, then replace the demonstration API with your application.
 
-## 📋 Table of Contents
+The included users API is an **unauthenticated, in-memory demonstration**. Data disappears on restart and is not shared between instances. `/health` reports process liveness only. Add application-specific authentication, authorization, durable storage, and dependency readiness checks before using the example to serve real user data.
 
-- [Features](#-features)
-- [Project Structure](#-project-structure)
-- [Requirements](#-requirements)
-- [Quick Start](#-quick-start)
-- [Configuration](#%EF%B8%8F-configuration)
-- [API Endpoints](#-api-endpoints)
-- [Development](#-development)
-- [Testing](#-testing)
-- [Deployment](#-deployment)
-- [Contributing](#-contributing)
-- [Acknowledgments](#-acknowledgments)
+## Requirements and support
 
-## ✨ Features
+- Go **1.27.3** or newer. CI validates Go 1.27.3 on Linux and macOS.
+- Docker with a running Linux-container daemon for container checks. Buildx is optional.
+- Air and Delve are optional development tools.
 
-- **Echo Web Framework**: High performance, minimalist Go web framework
-- **Viper Configuration**: Flexible configuration management with support for multiple formats
-- **Validator v10**: Comprehensive struct and field validation
-- **Clean Architecture**: Following Go project layout best practices
-- **Docker Support**: Multi-stage builds with Google's distroless images for enhanced security and minimal footprint
-- **Hot Reload**: Air integration for development
-- **Debugging Support**: Integrated Delve debugger with Air for seamless debugging experience
-- **Testing**: Example unit tests with testify
-- **Graceful Shutdown**: Proper server shutdown handling
-- **Middleware**: Built-in middleware for logging, recovery, CORS, etc.
-- **Health Check**: Health endpoint for monitoring
+Windows is not currently part of the supported test matrix. Containers target Linux and build for the Docker builder's native architecture; cross-platform images require an explicitly configured cross-build workflow.
 
-## 📁 Project Structure
+## Generate an application
 
-```
-.
-├── cmd/
-│   └── server/
-│       └── main.go          # Application entry point
-├── internal/
-│   ├── config/
-│   │   └── config.go        # Configuration management
-│   ├── handler/
-│   │   ├── handler.go       # HTTP handlers
-│   │   └── handler_test.go  # Handler tests
-│   ├── middleware/
-│   │   └── middleware.go    # Custom middleware
-│   ├── model/
-│   │   └── user.go          # Data models and validation
-│   └── service/
-│       └── user.go          # Business logic
-├── configs/
-│   └── config.yaml          # Configuration file
-├── .env.example             # Environment variables example
-├── .gitignore               # Git ignore file
-├── .air.toml                # Configuration file for air
-├── Dockerfile               # Docker configuration
-├── go.mod                   # Go modules
-├── go.sum                   # Go modules checksum
-└── README.md                # This file
-```
+Run the pinned [gonew tool](https://pkg.go.dev/golang.org/x/tools/cmd/gonew) from the directory that should contain your new project:
 
-## 🔧 Requirements
-
-- Go 1.27.3 or higher
-- Docker with BuildKit and Buildx (optional, for containerization)
-- Air (optional, for hot reload)
-- Delve (optional, for debugging)
-
-## 🚀 Quick Start
-
-### Important: Module Naming
-
-When using `gonew`, you **must** provide a valid Go module name that includes a domain name (with a dot). Examples of valid module names:
-
-- `github.com/your-username/project-name`
-- `example.com/project-name`
-- `mycompany.com/project-name`
-
-Invalid names like `my-project` or `project-name` will result in an error: `missing dot in first path element`.
-
-1. **Clone the template**:
-
-   ```bash
-   # Using gonew (recommended) - replace "your-username" with your actual GitHub username
-   gonew github.com/syz51/golang-server-template github.com/your-username/my-new-project
-   cd my-new-project
-   
-   # Or using a custom domain
-   gonew github.com/syz51/golang-server-template example.com/my-new-project
-   cd my-new-project
-   
-   # Or clone directly
-   git clone https://github.com/syz51/golang-server-template.git
-   cd golang-server-template
-   ```
-
-2. **Update module name**:
-
-   ```bash
-   # Replace "github.com/your-org/your-project" with your actual module path
-   go mod edit -module github.com/your-username/your-project
-   find . -type f -name "*.go" -exec sed -i 's|github.com/your-org/your-project|github.com/your-username/your-project|g' {} +
-   ```
-
-3. **Install dependencies**:
-
-   ```bash
-   go mod download
-   ```
-
-4. **Run the application**:
-
-   ```bash
-   go run cmd/server/main.go
-   ```
-
-5. **Test the API**:
-
-   ```bash
-   curl http://localhost:8080/health
-   ```
-
-## ⚙️ Configuration
-
-The application supports configuration through multiple sources (in order of precedence):
-
-1. Environment variables (prefixed with `APP_`)
-2. Configuration file (`config.yaml`)
-3. Default values
-
-### Environment Variables
-
-Copy `.env.example` to `.env` and adjust the values:
-
-```bash
+```sh
+go run golang.org/x/tools/cmd/gonew@v0.52.0 \
+  github.com/syz51/golang-server-template@latest \
+  example.com/my-server
+cd my-server
 cp .env.example .env
+go test ./...
+go run ./cmd/server
 ```
 
-### Configuration File
+Choose your own module path, such as `github.com/your-name/my-server`. `gonew` rewrites `go.mod` and internal Go imports automatically; **do not run a second module-renaming step**. For reproducible generation, replace `@latest` with an existing tag from [Releases](https://github.com/syz51/golang-server-template/releases). The template maintainer's release process is in [RELEASING.md](RELEASING.md).
 
-Edit `configs/config.yaml`:
+In another terminal:
 
-```yaml
-server:
-  port: 8080
-  host: "0.0.0.0"
-
-database:
-  driver: "postgres"
-  host: "localhost"
-  port: 5432
-  username: "postgres"
-  password: "postgres"
-  database: "app_db"
-  ssl_mode: "disable"
-
-logger:
-  level: "info"
-  format: "json"
-
-app:
-  name: "golang-server-template"
-  version: "1.0.0"
-  environment: "development"
-  debug: true
+```sh
+curl --fail http://localhost:8080/health
 ```
 
-## 🛠 API Endpoints
+Set `APP_APP_NAME` and `APP_APP_VERSION` for your application. Replace this README's upstream repository links and the contribution/security/release policies with your own policies when adopting the template. Retain the upstream MIT license notice. Generated projects do not automatically receive future template fixes; review upstream release changes and apply relevant updates.
 
-### Health Check
+## Work on the template itself
 
-```http
-GET /health
+Clone the repository to contribute or validate unpublished changes:
+
+```sh
+git clone https://github.com/syz51/golang-server-template.git
+cd golang-server-template
+go mod download
+go test -race ./...
+go run ./cmd/server
 ```
 
-Response:
+A direct clone intentionally retains the upstream module identity. Use the generation workflow above for a new application. Maintainers can validate generation from the current working tree without publishing it:
 
-```json
-{
-  "status": "ok",
-  "service": "golang-server-template",
-  "version": "1.0.0",
-  "timestamp": "2024-01-01T00:00:00Z",
-  "checks": {
-    "database": "ok",
-    "memory": "ok"
-  }
-}
+```sh
+go run ./tools/templatecheck
 ```
 
-### Users API
+## Configuration
 
-#### Create User
+Precedence, from highest to lowest:
 
-```http
-POST /api/v1/users
-Content-Type: application/json
+1. Exported process environment variables.
+2. `.env` in the working directory.
+3. `config.yaml` in the working directory, otherwise `configs/config.yaml`.
+4. Built-in defaults.
 
-{
-  "email": "user@example.com",
-  "first_name": "John",
-  "last_name": "Doe",
-  "age": 25,
-  "phone": "+1234567890"
-}
+Each load is isolated. Loading `.env` does not change the process environment. Missing files are optional; malformed files and invalid supported settings fail startup. No configuration is read from your home directory. Configuration paths are relative to the process working directory, not the binary location.
+
+The complete file is [configs/config.yaml](configs/config.yaml), and all environment keys are in [.env.example](.env.example). Unused database and debug settings have been removed: the starter does not connect to a database.
+
+| Setting | Default | Environment variable |
+| --- | --- | --- |
+| Listen host | `0.0.0.0` | `APP_SERVER_HOST` |
+| Listen port | `8080` | `APP_SERVER_PORT` |
+| Maximum request body | `1048576` bytes | `APP_SERVER_MAX_BODY_BYTES` |
+| Header timeout | `5s` | `APP_SERVER_READ_HEADER_TIMEOUT` |
+| Request read timeout | `30s` | `APP_SERVER_READ_TIMEOUT` |
+| Response write timeout | `30s` | `APP_SERVER_WRITE_TIMEOUT` |
+| Idle timeout | `60s` | `APP_SERVER_IDLE_TIMEOUT` |
+| Graceful shutdown timeout | `30s` | `APP_SERVER_SHUTDOWN_TIMEOUT` |
+| Allowed CORS origins | empty; disabled | `APP_SERVER_CORS_ALLOWED_ORIGINS` |
+| Log level | `info` | `APP_LOGGER_LEVEL` |
+| Log format | `json` | `APP_LOGGER_FORMAT` |
+| Application name | `golang-server-template` | `APP_APP_NAME` |
+| Application version | `1.0.0` | `APP_APP_VERSION` |
+| Environment label | `development` | `APP_APP_ENVIRONMENT` |
+
+Durations use Go strings such as `5s` or `1m`; byte limits and timeouts must be positive. Log levels are `debug`, `info`, `warn`, and `error`; formats are `json` and `text`. Environment labels are `development`, `staging`, and `production`. The label identifies deployment configuration; it does not add authentication or persistent storage.
+
+CORS is opt-in. Supply a YAML list or comma-separated environment value, for example `APP_SERVER_CORS_ALLOWED_ORIGINS=https://app.example.com,https://admin.example.com`. IPv6 literals such as `APP_SERVER_HOST=::1` are supported without brackets.
+
+Request bodies are buffered up to the configured limit before decoding. Oversized bodies, including chunked bodies, return HTTP 413. Streaming uploads or SSE require deliberate changes to buffering and timeout policies.
+
+## Demonstration API
+
+```sh
+curl --fail -X POST http://localhost:8080/api/v1/users \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"john@example.com","first_name":"John","last_name":"Doe","age":25,"phone":"+1234567890"}'
+
+curl --fail http://localhost:8080/api/v1/users/1
+
+curl --fail -X PUT http://localhost:8080/api/v1/users/1 \
+  -H 'Content-Type: application/json' -d '{"first_name":"Jane","phone":""}'
+
+curl --fail 'http://localhost:8080/api/v1/users?page=1&per_page=10'
+
+curl --fail -X DELETE http://localhost:8080/api/v1/users/1
 ```
 
-#### Get User
+| Route | Successful response |
+| --- | --- |
+| `GET /health` | 200; `status`, `service`, `version`, `timestamp` |
+| `POST /api/v1/users` | 201; created user |
+| `GET /api/v1/users/:id` | 200; user |
+| `PUT /api/v1/users/:id` | 200; updated user |
+| `DELETE /api/v1/users/:id` | 204; empty body |
+| `GET /api/v1/users` | 200; `users` and pagination `meta` |
 
-```http
-GET /api/v1/users/{id}
+Updates are partial despite the example's `PUT` route. Omitted or `null` phone leaves the value unchanged; an empty string clears it. Nonempty phone values must use E164 format. Missing users return 404; duplicate emails return 409; invalid inputs return 400; unsupported request media types return 415.
+
+Pagination is ordered by ascending user ID. Defaults are page 1 and 10 users per page. `per_page` must be 1–100; invalid, empty, repeated, or overflowing pagination parameters return 400. Valid pages beyond the available users return 200 with `users: []`. Pagination is not a snapshot across concurrent writes.
+
+## Development and checks
+
+```sh
+go build -o ./bin/server ./cmd/server
+go run ./cmd/server
+go test -race ./...
+go test -coverpkg=./internal/...,./cmd/server -cover ./...
+go vet ./...
+go mod verify
+go run ./tools/templatecheck
+go run ./tools/containercheck
 ```
 
-#### Update User
+CI runs formatting, vet, race tests, module verification, a vulnerability scan, generated-consumer checks, and container checks. Local Docker checks require a running daemon; generation checks need network access for pinned Go tools and dependencies. A clean vulnerability scan is a point-in-time result, not a security guarantee.
 
-```http
-PUT /api/v1/users/{id}
-Content-Type: application/json
+Install the pinned optional hot-reload tool:
 
-{
-  "first_name": "Jane",
-  "age": 26
-}
-```
-
-#### Delete User
-
-```http
-DELETE /api/v1/users/{id}
-```
-
-#### List Users
-
-```http
-GET /api/v1/users?page=1&per_page=10
-```
-
-## 🔧 Development
-
-### Available Commands
-
-```bash
-go build cmd/server/main.go           # Build the application
-go run cmd/server/main.go             # Run the application
-go test ./...                         # Run tests
-go fmt ./...                          # Format code
-go vet ./...                          # Run go vet
-golangci-lint run                     # Run golangci-lint
-go clean                              # Clean build artifacts
-go mod download                       # Download dependencies
-air                                   # Run with hot reload (requires Air and Delve)
-```
-
-### Hot Reload Development
-
-Install [Air v1.67.4](https://github.com/air-verse/air/releases/tag/v1.67.4) and [Delve v1.27.2](https://github.com/go-delve/delve/releases/tag/v1.27.2), the latest stable releases as of October 23, 2026. The included `.air.toml` launches the server through Delve, so both tools are required for `air`:
-
-```bash
+```sh
 go install github.com/air-verse/air@v1.67.4
-go install github.com/go-delve/delve/cmd/dlv@v1.27.2
-
-# Run with hot reload
 air
 ```
 
-Ensure `$(go env GOPATH)/bin` (or your custom `GOBIN`) is on `PATH` so both `air` and `dlv` can be found.
+Put `$(go env GOPATH)/bin` or your `GOBIN` on `PATH`. Air runs the application directly and reloads Go, YAML, and `.env` changes. It does not require a debugger.
 
-### Debugging (Optional)
+For an interactive debugging session, stop Air first and run:
 
-This project is configured to support debugging through Delve when using Air. The setup allows you to attach a debugger while enjoying hot reload functionality.
-
-#### Prerequisites
-
-Install Delve if you haven't already:
-
-```bash
+```sh
 go install github.com/go-delve/delve/cmd/dlv@v1.27.2
+dlv debug ./cmd/server
 ```
 
-#### Usage
+For a remote IDE attachment, use `dlv debug ./cmd/server --headless --listen=127.0.0.1:2345 --api-version=2 --accept-multiclient --continue`, then attach using host `127.0.0.1` and port `2345`. Keep the debug listener private. Delve requires the operating system's debugger permissions and setup; consult its [installation guide](https://github.com/go-delve/delve/blob/v1.27.2/Documentation/installation/README.md). Debugger startup is separate from the standard Air workflow.
 
-When you run `air`, the application starts with Delve debugging enabled and listens on port `2345`. You can attach your debugger to this port.
+## Docker
 
-**VS Code Setup:**
-
-Add this configuration to your `.vscode/launch.json`:
-
-```json
-{
-    "version": "0.2.0",
-    "configurations": [
-        {
-            "name": "Attach to Air",
-            "type": "go",
-            "request": "attach",
-            "mode": "remote",
-            "remotePath": "${workspaceFolder}",
-            "port": 2345,
-            "host": "127.0.0.1"
-        }
-    ]
-}
+```sh
+docker build -t my-server .
+docker run --rm --name my-server -p 127.0.0.1:8080:8080 \
+  -e APP_APP_ENVIRONMENT=production -e APP_APP_NAME=my-server my-server
 ```
 
-**GoLand/IntelliJ Setup:**
+The image contains a static Linux binary, the default YAML, and `/licenses/LICENSE`. It runs as a non-root user with a distroless base and has no shell. `.dockerignore` excludes local environment files and Git history from the build context. Do not bake secrets into YAML or build arguments.
 
-1. Go to **Run** → **Edit Configurations**
-2. Add **Go Remote** configuration
-3. Set **Host**: `127.0.0.1`
-4. Set **Port**: `2345`
+Use `--env-file .env` to supply a local environment file, or mount configuration read-only at `/app/configs/config.yaml`. For production, provide deployment-specific settings through your platform's configuration/secret mechanism. Docker defaults to the production environment label; an explicit environment file can override it.
 
-**Steps:**
+Stop with enough grace for active requests:
 
-1. Start the development server:
-
-   ```bash
-   air
-   ```
-
-2. Set your breakpoints in your Go code
-
-3. Attach your debugger using the configuration above
-
-4. The debugger will connect and you can debug while Air handles hot reloading
-
-#### Notes
-
-- The debug server accepts multiple client connections (`--accept-multiclient`)
-- Air will rebuild and restart the debug session on file changes
-- You may need to reconnect your debugger after hot reloads
-
-## 🧪 Testing
-
-Run all tests:
-
-```bash
-go test ./...
+```sh
+docker stop --time 35 my-server
 ```
 
-Run tests with coverage:
+The process handles SIGINT and SIGTERM. Coordinate the platform stop grace period with `APP_SERVER_SHUTDOWN_TIMEOUT`, allowing additional scheduling time. Graceful shutdown drains active HTTP requests and exits nonzero if draining exceeds its timeout. Inspect logs with `docker logs my-server`; use an appropriate debug container when needed, because `docker exec ... sh` cannot work in the distroless image.
 
-```bash
-go test -v -cover ./...
-```
+## Project layout and extension
 
-Run tests for specific package:
+- `cmd/server`: composition, middleware, routes, logging, and server lifecycle.
+- `internal/config`: isolated, validated runtime configuration.
+- `internal/handler`: HTTP decoding, validation, and error/status mapping.
+- `internal/model`: request/response types and validation.
+- `internal/service`: concurrency-safe demonstration business logic and storage.
+- `tools`: template-generation and Docker acceptance checks.
 
-```bash
-go test -v ./internal/handler
-```
+To add an entity, define request/response types, implement its service, add handlers, and register routes in `setupRoutes`. Echo v5 handlers accept `*echo.Context`. Keep stored objects private and return detached values; use typed or sentinel service errors rather than matching error text. Add tests for failure paths and concurrent access. Introduce a persistence interface when your application needs a real backend, and make readiness checks reflect that backend's actual state.
 
-## 🐳 Deployment
+## Contributing, security, and license
 
-### Docker
-
-This project uses a **multi-stage Docker build** with **Google's distroless images** for optimal security, performance, and image size.
-
-#### Docker Build Features
-
-- **Multi-stage build**: Separates build environment from runtime environment
-- **Distroless base image**: `gcr.io/distroless/static-debian13:nonroot` for minimal attack surface
-- **Build caching**: Optimized layer caching for faster builds
-- **Non-root user**: Runs as non-privileged user for enhanced security
-- **Static binary**: CGO-disabled build for maximum compatibility
-
-#### Quick Start
-
-Build and run with Docker:
-
-```bash
-# Build the image
-docker build -t golang-server-template .
-
-# Run with environment file
-docker run -p 8080:8080 --env-file .env golang-server-template
-
-# Run with environment variables
-docker run -p 8080:8080 \
-  -e APP_SERVER_PORT=8080 \
-  -e APP_DATABASE_HOST=localhost \
-  golang-server-template
-```
-
-#### Advanced Docker Commands
-
-```bash
-# Build with custom tag
-docker build -t your-registry/golang-server-template:v1.0.0 .
-
-# Run with volume mount for configs
-docker run -p 8080:8080 \
-  -v $(pwd)/configs:/app/configs:ro \
-  golang-server-template
-
-# Run with custom network
-docker network create app-network
-docker run -p 8080:8080 \
-  --network app-network \
-  --name golang-server \
-  golang-server-template
-
-# View container logs
-docker logs golang-server
-
-# Execute shell in running container (for debugging)
-docker exec -it golang-server sh
-```
-
-#### Docker Compose (Optional)
-
-Create a `docker-compose.yml` for local development:
-
-```yaml
-version: '3.8'
-services:
-  app:
-    build: .
-    ports:
-      - "8080:8080"
-    environment:
-      - APP_SERVER_PORT=8080
-      - APP_DATABASE_HOST=postgres
-    depends_on:
-      - postgres
-    volumes:
-      - ./configs:/app/configs:ro
-  
-  postgres:
-    image: postgres:15-alpine
-    environment:
-      - POSTGRES_DB=app_db
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-
-volumes:
-  postgres_data:
-```
-
-Run with Docker Compose:
-
-```bash
-docker-compose up -d
-```
-
-#### Distroless Benefits
-
-**Security Advantages:**
-
-- No shell, package managers, or unnecessary binaries
-- Minimal attack surface with only essential runtime dependencies
-- Non-root user execution
-- No known CVEs from base OS packages
-
-**Performance Benefits:**
-
-- Smaller image size (~15-20MB vs ~100MB+ with full OS)
-- Faster container startup and deployment
-- Reduced bandwidth for image pulls
-- Lower memory footprint
-
-**Production Considerations:**
-
-- Debugging requires tools like `docker exec` with debug containers
-- No shell access (use `kubectl debug` or `docker run --rm -it --pid container:xyz --net container:xyz --cap-add SYS_PTRACE nicolaka/netshoot` for debugging)
-
-#### Image Size Comparison
-
-```bash
-# Check final image size
-docker images golang-server-template
-
-# Expected output:
-# REPOSITORY              TAG       SIZE
-# golang-server-template  latest    ~15-20MB
-```
-
-### Production Build
-
-Build optimized binary for production:
-
-```bash
-CGO_ENABLED=0 GOOS=linux go build -a -ldflags '-w -s' -o server cmd/server/main.go
-```
-
-## 📝 Adding New Features
-
-### Adding a New Entity
-
-Use `github.com/labstack/echo/v5` for Echo imports. Echo v5 handlers and middleware receive `*echo.Context`.
-
-1. **Create model** in `internal/model/`:
-
-   ```go
-   type YourEntity struct {
-       ID   int    `json:"id" validate:"-"`
-       Name string `json:"name" validate:"required,min=2,max=50"`
-   }
-   ```
-
-2. **Create service** in `internal/service/`:
-
-   ```go
-   type YourEntityService struct {
-       // business logic
-   }
-   ```
-
-3. **Create handlers** in `internal/handler/`:
-
-   ```go
-   func (h *Handler) CreateYourEntity(c *echo.Context) error {
-       // handler logic
-   }
-   ```
-
-4. **Add routes** in `cmd/server/main.go`:
-
-   ```go
-   entities := api.Group("/entities")
-   entities.POST("", h.CreateYourEntity)
-   ```
-
-### Adding Middleware
-
-Create custom middleware in `internal/middleware/`:
-
-```go
-func YourMiddleware() echo.MiddlewareFunc {
-    return func(next echo.HandlerFunc) echo.HandlerFunc {
-        return func(c *echo.Context) error {
-            // middleware logic
-            return next(c)
-        }
-    }
-}
-```
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🙏 Acknowledgments
-
-- [Echo](https://echo.labstack.com/) - High performance, minimalist Go web framework
-- [Viper](https://github.com/spf13/viper) - Go configuration with fangs
-- [Validator](https://github.com/go-playground/validator) - Go Struct and Field validation
-- [Air](https://github.com/air-verse/air) - Live reload for Go apps
-- [Delve](https://github.com/go-delve/delve) - Debugger for the Go programming language
+See [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), and [RELEASING.md](RELEASING.md). This project uses the [MIT License](LICENSE).

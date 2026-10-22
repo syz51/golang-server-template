@@ -2,7 +2,7 @@ package middleware
 
 import (
 	"github.com/labstack/echo/v5"
-	"github.com/your-org/your-project/internal/config"
+	"github.com/syz51/golang-server-template/internal/config"
 )
 
 // Config middleware injects the config into the context

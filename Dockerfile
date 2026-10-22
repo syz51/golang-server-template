@@ -1,33 +1,15 @@
-# Build stage
 FROM golang:1.27.3-alpine AS builder
-
-# Set working directory
 WORKDIR /app
-
-ENV GOCACHE=/root/.cache/go-build
-
-# Copy source code
+COPY go.mod go.sum ./
+RUN go mod download
 COPY . .
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -o /server ./cmd/server
 
-# Build the application
-RUN --mount=type=cache,target=/go/pkg/mod/ \
-    --mount=type=cache,target="/root/.cache/go-build" \
-    CGO_ENABLED=0 GOOS=linux go build -a -o server cmd/server/main.go
-
-# Final stage
 FROM gcr.io/distroless/static-debian13:nonroot
-
-# Create app directory
 WORKDIR /app
-
-# Copy the binary from builder stage
-COPY --from=builder /app/server .
-
-# Copy config directory
-COPY --from=builder /app/configs ./configs
-
-# Expose port
+ENV APP_APP_ENVIRONMENT=production
+COPY --from=builder /server /app/server
+COPY --from=builder /app/configs /app/configs
+COPY --from=builder /app/LICENSE /licenses/LICENSE
 EXPOSE 8080
-
-# Command to run
 CMD ["/app/server"]

@@ -16,6 +16,7 @@
 
 # Go workspace file
 go.work
+go.work.sum
 
 # IDE files
 .vscode/
@@ -35,6 +36,8 @@ Thumbs.db
 
 # Environment variables
 .env
+.env.*
+!.env.example
 
 # Build artifacts
 bin/
@@ -44,4 +47,9 @@ tmp/
 *.log
 
 # Air live reload
-build-errors.log 
+build-errors.log
+
+# Root build output
+/server
+/coverage
+/coverage.html

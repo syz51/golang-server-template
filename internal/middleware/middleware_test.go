@@ -8,7 +8,7 @@ import (
 
 	"github.com/labstack/echo/v5"
 	"github.com/stretchr/testify/require"
-	"github.com/your-org/your-project/internal/config"
+	"github.com/syz51/golang-server-template/internal/config"
 )
 
 func TestConfigPassesContextAndError(t *testing.T) {

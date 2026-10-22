@@ -7,8 +7,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/your-org/your-project/internal/config"
-	"github.com/your-org/your-project/internal/model"
+	"github.com/syz51/golang-server-template/internal/config"
+	"github.com/syz51/golang-server-template/internal/model"
 
 	"github.com/labstack/echo/v5"
 	"github.com/stretchr/testify/assert"

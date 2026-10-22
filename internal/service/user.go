@@ -1,11 +1,19 @@
 package service
 
 import (
+	"errors"
 	"fmt"
+	"sort"
 	"sync"
 	"time"
 
-	"github.com/your-org/your-project/internal/model"
+	"github.com/syz51/golang-server-template/internal/model"
+)
+
+var (
+	ErrUserNotFound      = errors.New("user not found")
+	ErrEmailExists       = errors.New("email already exists")
+	ErrInvalidPagination = errors.New("invalid pagination")
 )
 
 // UserService handles business logic for users
@@ -31,7 +39,7 @@ func (s *UserService) CreateUser(req *model.CreateUserRequest) (*model.User, err
 	// Check if email already exists
 	for _, user := range s.users {
 		if user.Email == req.Email {
-			return nil, fmt.Errorf("user with email %s already exists", req.Email)
+			return nil, fmt.Errorf("%w: %s", ErrEmailExists, req.Email)
 		}
 	}
 
@@ -50,7 +58,8 @@ func (s *UserService) CreateUser(req *model.CreateUserRequest) (*model.User, err
 	s.users[s.nextID] = user
 	s.nextID++
 
-	return user, nil
+	snapshot := *user
+	return &snapshot, nil
 }
 
 // GetUser retrieves a user by ID
@@ -60,10 +69,11 @@ func (s *UserService) GetUser(id int) (*model.User, error) {
 
 	user, exists := s.users[id]
 	if !exists {
-		return nil, fmt.Errorf("user with ID %d not found", id)
+		return nil, fmt.Errorf("%w: ID %d", ErrUserNotFound, id)
 	}
 
-	return user, nil
+	snapshot := *user
+	return &snapshot, nil
 }
 
 // UpdateUser updates an existing user
@@ -73,14 +83,14 @@ func (s *UserService) UpdateUser(id int, req *model.UpdateUserRequest) (*model.U
 
 	user, exists := s.users[id]
 	if !exists {
-		return nil, fmt.Errorf("user with ID %d not found", id)
+		return nil, fmt.Errorf("%w: ID %d", ErrUserNotFound, id)
 	}
 
 	// Check if email already exists (if being updated)
 	if req.Email != nil && *req.Email != user.Email {
 		for _, existingUser := range s.users {
 			if existingUser.ID != id && existingUser.Email == *req.Email {
-				return nil, fmt.Errorf("user with email %s already exists", *req.Email)
+				return nil, fmt.Errorf("%w: %s", ErrEmailExists, *req.Email)
 			}
 		}
 	}
@@ -107,7 +117,8 @@ func (s *UserService) UpdateUser(id int, req *model.UpdateUserRequest) (*model.U
 
 	user.UpdatedAt = time.Now()
 
-	return user, nil
+	snapshot := *user
+	return &snapshot, nil
 }
 
 // DeleteUser deletes a user by ID
@@ -116,60 +127,51 @@ func (s *UserService) DeleteUser(id int) error {
 	defer s.mutex.Unlock()
 
 	if _, exists := s.users[id]; !exists {
-		return fmt.Errorf("user with ID %d not found", id)
+		return fmt.Errorf("%w: ID %d", ErrUserNotFound, id)
 	}
 
 	delete(s.users, id)
 	return nil
 }
 
-// ListUsers returns a paginated list of users
+// ListUsers returns users ordered by ascending ID. Pages beyond the results are empty.
+// Invalid limits and offsets that would overflow int are rejected before multiplication.
 func (s *UserService) ListUsers(page, perPage int) (*model.UserListResponse, error) {
+	if page < 1 || perPage < 1 || perPage > 100 {
+		return nil, fmt.Errorf("%w: page must be positive and per_page must be between 1 and 100", ErrInvalidPagination)
+	}
+	maxInt := int(^uint(0) >> 1)
+	if page-1 > maxInt/perPage {
+		return nil, fmt.Errorf("%w: page offset is too large", ErrInvalidPagination)
+	}
+	start := (page - 1) * perPage
+
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
 
-	// Convert map to slice
-	allUsers := make([]*model.User, 0, len(s.users))
-	for _, user := range s.users {
-		allUsers = append(allUsers, user)
+	total := len(s.users)
+	totalPages := total / perPage
+	if total%perPage != 0 {
+		totalPages++
 	}
-
-	total := len(allUsers)
-	totalPages := (total + perPage - 1) / perPage
-
-	// Calculate pagination
-	start := (page - 1) * perPage
-	end := start + perPage
-
+	response := &model.UserListResponse{
+		Users: []model.User{},
+		Meta:  model.MetaData{Page: page, PerPage: perPage, Total: total, TotalPages: totalPages},
+	}
 	if start >= total {
-		return &model.UserListResponse{
-			Users: []model.User{},
-			Meta: model.MetaData{
-				Page:       page,
-				PerPage:    perPage,
-				Total:      total,
-				TotalPages: totalPages,
-			},
-		}, nil
+		return response, nil
 	}
 
-	if end > total {
-		end = total
+	ids := make([]int, 0, total)
+	for id := range s.users {
+		ids = append(ids, id)
 	}
-
-	// Get paginated users
-	paginatedUsers := make([]model.User, 0, end-start)
-	for i := start; i < end; i++ {
-		paginatedUsers = append(paginatedUsers, *allUsers[i])
+	sort.Ints(ids)
+	// Bound the addition by total to avoid overflowing start + perPage.
+	count := min(perPage, total-start)
+	response.Users = make([]model.User, 0, count)
+	for _, id := range ids[start : start+count] {
+		response.Users = append(response.Users, *s.users[id])
 	}
-
-	return &model.UserListResponse{
-		Users: paginatedUsers,
-		Meta: model.MetaData{
-			Page:       page,
-			PerPage:    perPage,
-			Total:      total,
-			TotalPages: totalPages,
-		},
-	}, nil
+	return response, nil
 }
