@@ -1,0 +1,26 @@
+name: Feature request
+description: Suggest a focused improvement to the minimal server template.
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This template ships only GET /health and has no required service or backend. Propose improvements that help consumers start their own applications without imposing an application architecture. Questions are welcome in [Discussions](https://github.com/syz51/golang-server-template/discussions) or a blank issue.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: Who encounters this problem, and what is difficult with the current template?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+      description: Describe the resulting behavior and why it belongs in the shared template rather than an individual application.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives and compatibility
+      description: Note alternatives, workarounds, and any impact on existing consumers, dependencies, or configuration. An implementation is not required.
