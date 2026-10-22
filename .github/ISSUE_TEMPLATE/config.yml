@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Report a security vulnerability privately
+    url: https://github.com/syz51/golang-server-template/security/advisories/new
+    about: Use private vulnerability reporting; if unavailable, follow the fallback in SECURITY.md without publishing vulnerability details.
+  - name: Questions and discussion
+    url: https://github.com/syz51/golang-server-template/discussions
+    about: Ask usage questions here, or open a blank issue if Discussions is unavailable.

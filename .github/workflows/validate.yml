@@ -5,6 +5,8 @@ on:
     branches: ['**']
     tags: ['v*']
   pull_request:
+  schedule:
+    - cron: '17 0 * * 1' # Monday 00:17 UTC
   workflow_dispatch:
     inputs:
       release_tag:
@@ -103,9 +105,56 @@ jobs:
           go-version: '1.27.3'
       - run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
 
+  codeql:
+    name: CodeQL (${{ matrix.language }})
+    # Private/internal consumers must enable licensed Code Security before opting in.
+    # Dependabot PR uploads are supported; its push tokens (including squash authors) are read-only.
+    if: >-
+      (github.event.repository.visibility == 'public' || vars.ENABLE_CODEQL == 'true') &&
+      (github.event_name != 'push' ||
+        (github.actor != 'dependabot[bot]' &&
+          github.event.head_commit.author.username != 'dependabot[bot]' &&
+          github.event.head_commit.author.name != 'dependabot[bot]'))
+    needs: release-tag
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Go does not support build-mode: none; use an explicit Go build.
+          - language: go
+            build-mode: manual
+          - language: actions
+            build-mode: none
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        if: matrix.language == 'go'
+        with:
+          go-version: '1.27.3'
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+      - name: Build Go for CodeQL
+        if: matrix.language == 'go'
+        run: go build ./...
+      - name: Analyze and upload CodeQL results
+        uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          category: '/language:${{ matrix.language }}'
+
   publish:
     if: github.event_name == 'push' && github.ref_type == 'tag'
-    needs: [release-tag, native, generated-consumer, container, vulnerabilities]
+    needs: [release-tag, native, generated-consumer, container, vulnerabilities, codeql]
     runs-on: ubuntu-latest
     timeout-minutes: 40
     permissions:

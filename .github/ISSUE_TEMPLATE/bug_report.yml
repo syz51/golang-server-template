@@ -1,0 +1,46 @@
+name: Bug report
+description: Report a reproducible problem in the upstream template.
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For vulnerabilities, follow [SECURITY.md](https://github.com/syz51/golang-server-template/blob/main/SECURITY.md) instead of posting details here. Remove secrets and personal information from all examples and output.
+  - type: input
+    id: revision
+    attributes:
+      label: Template version or commit
+      description: Include the upstream tag or commit and any relevant changes in your generated application.
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Platform and Go version
+      description: Paste go version and your OS/architecture. Linux and macOS are the supported test platforms; identify other platforms explicitly. Include Docker version and image platform if relevant.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: Provide minimal steps, exact commands, and relevant sanitized configuration. Explain whether this occurs in the template or a generated application.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Sanitized output
+      description: Include relevant errors, logs, or test output if available. Remove credentials, tokens, personal information, and private URLs before submitting.
+      render: text

@@ -115,13 +115,15 @@ go run ./tools/containercheck
 
 CI runs formatting, vet, race tests, module verification, a vulnerability scan, generated-consumer checks, and container checks. Local Docker checks require a running daemon; generation checks need network access for pinned Go tools and dependencies. A clean vulnerability scan is a point-in-time result, not a security guarantee.
 
+CodeQL scans Go and GitHub Actions in public repositories. Private/internal generated repositories skip CodeQL by default: first enable the licensed GitHub Code Security capability for the repository, then set the repository Actions variable `ENABLE_CODEQL` to `true` to opt in. Do not require CodeQL checks while scans are disabled; the public upstream requires both analyses. Dependabot pull requests are scanned, but pushes triggered by or authored by Dependabot are skipped to avoid read-only-token upload failures. Merge Dependabot pull requests using **Create a merge commit**, rather than squash or rebase; see [CONTRIBUTING.md](CONTRIBUTING.md).
+
 To verify a public tag or pushed full commit through the Go module proxy/checksum database and exercise the generated consumer, including native HTTP, shutdown, and production container checks:
 
 ```sh
 go run ./tools/publiccheck -version "$RELEASE_TAG"
 ```
 
-Set `RELEASE_TAG` to the exact public version or full commit to check. Network access and a running Linux-container Docker daemon are required; missing Docker fails the check. On a maintainer-authorized tag push, CI runs this check after all validation jobs and automatically creates a GitHub Release. Manual workflow dispatch remains validation only. See [RELEASING.md](RELEASING.md) for tagging and recovery.
+Set `RELEASE_TAG` to the exact public version or full commit to check. Network access and a running Linux-container Docker daemon are required; missing Docker fails the check. The automated release path is for public module repositories: on a maintainer-authorized tag push, CI runs this check after all validation jobs and automatically creates a GitHub Release. Private consumers must define their own release path; opting into CodeQL does not make a module publicly available. Manual workflow dispatch remains validation only. See [RELEASING.md](RELEASING.md) for tagging and recovery.
 
 Install the pinned optional hot-reload tool:
 
@@ -206,4 +208,4 @@ Folders are conventions, not a required application architecture. Add your own h
 
 ## Contributing, security, and license
 
-See [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), and [RELEASING.md](RELEASING.md). This project uses the [MIT License](LICENSE).
+See [CONTRIBUTING.md](CONTRIBUTING.md), the [code of conduct](CODE_OF_CONDUCT.md), [SECURITY.md](SECURITY.md), and [RELEASING.md](RELEASING.md). Use the [issue forms](https://github.com/syz51/golang-server-template/issues/new/choose) for bugs and feature requests; ask questions in [Discussions](https://github.com/syz51/golang-server-template/discussions) or a blank issue. Replace upstream [code ownership](.github/CODEOWNERS) and community/reporting links when adopting the template. This project uses the [MIT License](LICENSE).
