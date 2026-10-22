@@ -21,6 +21,8 @@ Keep the shipped HTTP surface limited to `GET /health`; do not add business API 
 
 The template acceptance check recursively generates from the current working tree, including relevant uncommitted files. Never put credentials or personal environment files in fixtures. It verifies module/import rewriting, race tests, vet, build, skeleton HTTP behavior, and SIGTERM exit. Container checks preserve production image, non-root, filesystem, HTTP, and shutdown checks and clean up their own images and containers.
 
+For a public tag or pushed full commit, set `RELEASE_TAG` to the exact version/commit and run `go run ./tools/publiccheck -version "$RELEASE_TAG"`. It verifies public module proxy/checksum-database availability and the generated consumer's race tests, vet, native HTTP, SIGTERM, and production container behavior. Network access and a running Linux-container Docker daemon are required; unavailable Docker fails the check. Use `templatecheck` for unpublished working-tree changes. Maintainer-authorized tag pushes run public verification before automated GitHub Release creation; manual workflow dispatch is validation only. Follow [RELEASING.md](RELEASING.md) for the release process and recovery without rewriting tags.
+
 Report reproducible bugs with your Go version, OS/architecture, commands, expected behavior, and sanitized output. Follow [SECURITY.md](SECURITY.md) for vulnerabilities. Do not include secrets in issues, pull requests, logs, or screenshots.
 
 Maintainers review changes before merging. Do not claim a CI, release, or platform check passed unless its actual result is available.

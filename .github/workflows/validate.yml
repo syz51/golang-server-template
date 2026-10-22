@@ -15,6 +15,11 @@ on:
 permissions:
   contents: read
 
+# Serialize retries for a tag without cancelling a publication in progress.
+concurrency:
+  group: delivery-${{ github.ref_type == 'tag' && github.ref || github.run_id }}
+  cancel-in-progress: false
+
 jobs:
   release-tag:
     runs-on: ubuntu-latest
@@ -97,3 +102,76 @@ jobs:
         with:
           go-version: '1.27.3'
       - run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
+
+  publish:
+    if: github.event_name == 'push' && github.ref_type == 'tag'
+    needs: [release-tag, native, generated-consumer, container, vulnerabilities]
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      contents: write
+    env:
+      RELEASE_TAG: ${{ github.ref_name }}
+      CANDIDATE_COMMIT: ${{ github.sha }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: '1.27.3'
+      - name: Verify remote tag still matches the event commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "refs/tags/$RELEASE_TAG"
+          remote_commit="$(git rev-parse 'FETCH_HEAD^{commit}')"
+          if [[ "$remote_commit" != "$CANDIDATE_COMMIT" ]]; then
+            echo "::error::Tag $RELEASE_TAG no longer points to event commit $CANDIDATE_COMMIT (found $remote_commit); keep tags immutable and publish a new version."
+            exit 1
+          fi
+      # Run even if this tag already has a release: retries must revalidate it.
+      - name: Validate exact public module and generated consumer
+        run: go run ./tools/publiccheck -version "$RELEASE_TAG" -commit "$CANDIDATE_COMMIT"
+      - name: Create release or preserve an existing publication
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Recheck after public consumer tests, before any release API operation.
+          git fetch --no-tags origin "refs/tags/$RELEASE_TAG"
+          remote_commit="$(git rev-parse 'FETCH_HEAD^{commit}')"
+          if [[ "$remote_commit" != "$CANDIDATE_COMMIT" ]]; then
+            echo "::error::Tag $RELEASE_TAG no longer points to event commit $CANDIDATE_COMMIT (found $remote_commit); keep tags immutable and publish a new version."
+            exit 1
+          fi
+          # List with authentication so drafts are visible. API errors must fail,
+          # never be mistaken for an absent release.
+          existing="$(gh api --paginate "repos/$GH_REPO/releases?per_page=100" |
+            jq -s --arg tag "$RELEASE_TAG" '[.[][] | select(.tag_name == $tag)]')"
+          if jq -e 'length > 0' <<< "$existing" > /dev/null; then
+            if jq -e 'any(.[]; .draft)' <<< "$existing" > /dev/null; then
+              echo "::error::A draft release exists for $RELEASE_TAG; a maintainer must resolve it before retrying."
+              exit 1
+            fi
+            release_url="$(jq -r '.[0].html_url' <<< "$existing")"
+            echo "Existing published release preserved: $release_url"
+          else
+            # Do not change Latest, including when publishing older maintenance
+            # tags. Maintainers can choose that designation separately.
+            flags=(--latest=false)
+            if [[ "$RELEASE_TAG" == *-* ]]; then
+              flags+=(--prerelease)
+            fi
+            notes="Validated with toolchain $(go env GOVERSION) on Linux and macOS; production container checks run on Linux."
+            notes+=$'\n\nPublic consumer verification (network and Docker required):\n```sh\n'
+            notes+="go run ./tools/publiccheck -version $RELEASE_TAG -commit $CANDIDATE_COMMIT"
+            notes+=$'\n```'
+            release_url="$(gh release create "$RELEASE_TAG" --repo "$GH_REPO" \
+              --verify-tag --generate-notes --title "$RELEASE_TAG" \
+              --notes "$notes" "${flags[@]}")"
+          fi
+          printf 'Release: %s\n' "$release_url" >> "$GITHUB_STEP_SUMMARY"

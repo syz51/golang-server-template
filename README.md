@@ -115,6 +115,14 @@ go run ./tools/containercheck
 
 CI runs formatting, vet, race tests, module verification, a vulnerability scan, generated-consumer checks, and container checks. Local Docker checks require a running daemon; generation checks need network access for pinned Go tools and dependencies. A clean vulnerability scan is a point-in-time result, not a security guarantee.
 
+To verify a public tag or pushed full commit through the Go module proxy/checksum database and exercise the generated consumer, including native HTTP, shutdown, and production container checks:
+
+```sh
+go run ./tools/publiccheck -version "$RELEASE_TAG"
+```
+
+Set `RELEASE_TAG` to the exact public version or full commit to check. Network access and a running Linux-container Docker daemon are required; missing Docker fails the check. On a maintainer-authorized tag push, CI runs this check after all validation jobs and automatically creates a GitHub Release. Manual workflow dispatch remains validation only. See [RELEASING.md](RELEASING.md) for tagging and recovery.
+
 Install the pinned optional hot-reload tool:
 
 ```sh
