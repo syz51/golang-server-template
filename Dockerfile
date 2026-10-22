@@ -1,5 +1,5 @@
 # Build stage
-FROM golang:1.24-alpine AS builder
+FROM golang:1.27.3-alpine AS builder
 
 # Set working directory
 WORKDIR /app
@@ -15,7 +15,7 @@ RUN --mount=type=cache,target=/go/pkg/mod/ \
     CGO_ENABLED=0 GOOS=linux go build -a -o server cmd/server/main.go
 
 # Final stage
-FROM gcr.io/distroless/static-debian12:nonroot
+FROM gcr.io/distroless/static-debian13:nonroot
 
 # Create app directory
 WORKDIR /app
@@ -30,4 +30,4 @@ COPY --from=builder /app/configs ./configs
 EXPOSE 8080
 
 # Command to run
-CMD ["/app/server"] 
+CMD ["/app/server"]

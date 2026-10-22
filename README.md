@@ -1,6 +1,6 @@
 # Go Server Template
 
-An opinionated production-ready Go server template using Echo, Viper, and Validator v10, following Go best practices for project layout.
+An opinionated production-ready Go server template using Echo v5, Viper, and Validator v10, following Go best practices for project layout.
 
 ## 📋 Table of Contents
 
@@ -62,8 +62,8 @@ An opinionated production-ready Go server template using Echo, Viper, and Valida
 
 ## 🔧 Requirements
 
-- Go 1.24 or higher
-- Docker (optional, for containerization)
+- Go 1.27.3 or higher
+- Docker with BuildKit and Buildx (optional, for containerization)
 - Air (optional, for hot reload)
 - Delve (optional, for debugging)
 
@@ -249,20 +249,22 @@ go vet ./...                          # Run go vet
 golangci-lint run                     # Run golangci-lint
 go clean                              # Clean build artifacts
 go mod download                       # Download dependencies
-air                                   # Run with hot reload (requires air)
+air                                   # Run with hot reload (requires Air and Delve)
 ```
 
 ### Hot Reload Development
 
-Install Air for hot reloading:
+Install [Air v1.67.4](https://github.com/air-verse/air/releases/tag/v1.67.4) and [Delve v1.27.2](https://github.com/go-delve/delve/releases/tag/v1.27.2), the latest stable releases as of October 23, 2026. The included `.air.toml` launches the server through Delve, so both tools are required for `air`:
 
 ```bash
-# Install Air version 1.61.7, until https://github.com/air-verse/air/issues/775 is fixed
-go install github.com/cosmtrek/air@1.61.7
+go install github.com/air-verse/air@v1.67.4
+go install github.com/go-delve/delve/cmd/dlv@v1.27.2
 
 # Run with hot reload
 air
 ```
+
+Ensure `$(go env GOPATH)/bin` (or your custom `GOBIN`) is on `PATH` so both `air` and `dlv` can be found.
 
 ### Debugging (Optional)
 
@@ -273,7 +275,7 @@ This project is configured to support debugging through Delve when using Air. Th
 Install Delve if you haven't already:
 
 ```bash
-go install github.com/go-delve/delve/cmd/dlv@latest
+go install github.com/go-delve/delve/cmd/dlv@v1.27.2
 ```
 
 #### Usage
@@ -357,7 +359,7 @@ This project uses a **multi-stage Docker build** with **Google's distroless imag
 #### Docker Build Features
 
 - **Multi-stage build**: Separates build environment from runtime environment
-- **Distroless base image**: `gcr.io/distroless/static-debian12:nonroot` for minimal attack surface
+- **Distroless base image**: `gcr.io/distroless/static-debian13:nonroot` for minimal attack surface
 - **Build caching**: Optimized layer caching for faster builds
 - **Non-root user**: Runs as non-privileged user for enhanced security
 - **Static binary**: CGO-disabled build for maximum compatibility
@@ -489,6 +491,8 @@ CGO_ENABLED=0 GOOS=linux go build -a -ldflags '-w -s' -o server cmd/server/main.
 
 ### Adding a New Entity
 
+Use `github.com/labstack/echo/v5` for Echo imports. Echo v5 handlers and middleware receive `*echo.Context`.
+
 1. **Create model** in `internal/model/`:
 
    ```go
@@ -509,7 +513,7 @@ CGO_ENABLED=0 GOOS=linux go build -a -ldflags '-w -s' -o server cmd/server/main.
 3. **Create handlers** in `internal/handler/`:
 
    ```go
-   func (h *Handler) CreateYourEntity(c echo.Context) error {
+   func (h *Handler) CreateYourEntity(c *echo.Context) error {
        // handler logic
    }
    ```
@@ -528,7 +532,7 @@ Create custom middleware in `internal/middleware/`:
 ```go
 func YourMiddleware() echo.MiddlewareFunc {
     return func(next echo.HandlerFunc) echo.HandlerFunc {
-        return func(c echo.Context) error {
+        return func(c *echo.Context) error {
             // middleware logic
             return next(c)
         }
@@ -553,5 +557,5 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [Echo](https://echo.labstack.com/) - High performance, minimalist Go web framework
 - [Viper](https://github.com/spf13/viper) - Go configuration with fangs
 - [Validator](https://github.com/go-playground/validator) - Go Struct and Field validation
-- [Air](https://github.com/cosmtrek/air) - Live reload for Go apps
+- [Air](https://github.com/air-verse/air) - Live reload for Go apps
 - [Delve](https://github.com/go-delve/delve) - Debugger for the Go programming language

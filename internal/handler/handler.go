@@ -9,7 +9,7 @@ import (
 	"github.com/your-org/your-project/internal/model"
 	"github.com/your-org/your-project/internal/service"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 // Handler contains all the handlers
@@ -27,7 +27,7 @@ func New(cfg *config.Config) *Handler {
 }
 
 // Health returns the health status of the service
-func (h *Handler) Health(c echo.Context) error {
+func (h *Handler) Health(c *echo.Context) error {
 	response := model.HealthResponse{
 		Status:    "ok",
 		Service:   h.config.App.Name,
@@ -43,7 +43,7 @@ func (h *Handler) Health(c echo.Context) error {
 }
 
 // CreateUser creates a new user
-func (h *Handler) CreateUser(c echo.Context) error {
+func (h *Handler) CreateUser(c *echo.Context) error {
 	var req model.CreateUserRequest
 
 	if err := c.Bind(&req); err != nil {
@@ -70,7 +70,7 @@ func (h *Handler) CreateUser(c echo.Context) error {
 }
 
 // GetUser retrieves a user by ID
-func (h *Handler) GetUser(c echo.Context) error {
+func (h *Handler) GetUser(c *echo.Context) error {
 	idParam := c.Param("id")
 	id, err := strconv.Atoi(idParam)
 	if err != nil {
@@ -90,7 +90,7 @@ func (h *Handler) GetUser(c echo.Context) error {
 }
 
 // UpdateUser updates an existing user
-func (h *Handler) UpdateUser(c echo.Context) error {
+func (h *Handler) UpdateUser(c *echo.Context) error {
 	idParam := c.Param("id")
 	id, err := strconv.Atoi(idParam)
 	if err != nil {
@@ -131,7 +131,7 @@ func (h *Handler) UpdateUser(c echo.Context) error {
 }
 
 // DeleteUser deletes a user by ID
-func (h *Handler) DeleteUser(c echo.Context) error {
+func (h *Handler) DeleteUser(c *echo.Context) error {
 	idParam := c.Param("id")
 	id, err := strconv.Atoi(idParam)
 	if err != nil {
@@ -150,7 +150,7 @@ func (h *Handler) DeleteUser(c echo.Context) error {
 }
 
 // ListUsers returns a paginated list of users
-func (h *Handler) ListUsers(c echo.Context) error {
+func (h *Handler) ListUsers(c *echo.Context) error {
 	// Parse query parameters
 	pageParam := c.QueryParam("page")
 	perPageParam := c.QueryParam("per_page")

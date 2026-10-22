@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"net/http"
 	"os"
 	"os/signal"
 	"time"
@@ -13,8 +12,8 @@ import (
 	"github.com/your-org/your-project/internal/handler"
 	"github.com/your-org/your-project/internal/middleware"
 
-	"github.com/labstack/echo/v4"
-	echomiddleware "github.com/labstack/echo/v4/middleware"
+	"github.com/labstack/echo/v5"
+	echomiddleware "github.com/labstack/echo/v5/middleware"
 )
 
 func main() {
@@ -24,17 +23,29 @@ func main() {
 		log.Fatalf("Failed to load config: %v", err)
 	}
 
-	// Create Echo instance
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer stop()
+
+	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
+	log.Printf("Server starting on %s", addr)
+	if err := startServer(ctx, newServer(cfg), echo.StartConfig{
+		Address:         addr,
+		HideBanner:      true,
+		HidePort:        true,
+		GracefulTimeout: 30 * time.Second,
+	}); err != nil {
+		log.Fatal(err)
+	}
+	log.Println("Server exited")
+}
+
+func newServer(cfg *config.Config) *echo.Echo {
 	e := echo.New()
 
-	// Configure Echo
-	e.HideBanner = true
-	e.HidePort = true
-
 	// Add middleware
-	e.Use(echomiddleware.Logger())
+	e.Use(echomiddleware.RequestLogger())
 	e.Use(echomiddleware.Recover())
-	e.Use(echomiddleware.CORS())
+	e.Use(echomiddleware.CORS("*"))
 	e.Use(echomiddleware.RequestID())
 	e.Use(middleware.Config(cfg))
 
@@ -43,31 +54,23 @@ func main() {
 
 	// Routes
 	setupRoutes(e, h)
+	return e
+}
 
-	// Start server
-	go func() {
-		addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
-		log.Printf("Server starting on %s", addr)
-		if err := e.Start(addr); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Failed to start server: %v", err)
-		}
-	}()
-
-	// Wait for interrupt signal to gracefully shutdown the server
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, os.Interrupt)
-	<-quit
-	log.Println("Shutting down server...")
-
-	// Graceful shutdown with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	if err := e.Shutdown(ctx); err != nil {
-		log.Fatalf("Server forced to shutdown: %v", err)
+func startServer(ctx context.Context, e *echo.Echo, sc echo.StartConfig) error {
+	// Start waits for its shutdown goroutine, but reports shutdown errors only
+	// through this callback. Preserve the application's failure exit on timeout.
+	var shutdownErr error
+	sc.OnShutdownError = func(err error) {
+		shutdownErr = err
 	}
-
-	log.Println("Server exited")
+	if err := sc.Start(ctx, e); err != nil {
+		return fmt.Errorf("failed to start server: %w", err)
+	}
+	if shutdownErr != nil {
+		return fmt.Errorf("server forced to shutdown: %w", shutdownErr)
+	}
+	return nil
 }
 
 func setupRoutes(e *echo.Echo, h *handler.Handler) {

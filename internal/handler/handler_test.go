@@ -10,7 +10,7 @@ import (
 	"github.com/your-org/your-project/internal/config"
 	"github.com/your-org/your-project/internal/model"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 	"github.com/stretchr/testify/assert"
 )
 
