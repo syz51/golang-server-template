@@ -153,6 +153,38 @@ dlv debug ./cmd/server
 
 For a remote IDE attachment, use `dlv debug ./cmd/server --headless --listen=127.0.0.1:2345 --api-version=2 --accept-multiclient --continue`, then attach using host `127.0.0.1` and port `2345`. Keep the debug listener private. Delve requires the operating system's debugger permissions and setup; consult its [installation guide](https://github.com/go-delve/delve/blob/v1.27.2/Documentation/installation/README.md). Debugger startup is separate from the standard Air workflow.
 
+### Optional Docker debugging
+
+If native debugging stalls, use the separate [development debug image](tools/debugcheck/Dockerfile):
+
+```sh
+docker build -f tools/debugcheck/Dockerfile -t server-debug .
+docker run --rm --name server-debug --cap-drop=ALL \
+  -p 127.0.0.1:18880:8080 -p 127.0.0.1:12345:2345 server-debug
+```
+
+The application starts paused. In another terminal, connect with the pinned `dlv` installed above:
+
+```text
+dlv connect 127.0.0.1:12345
+(dlv) config substitute-path /src /absolute/path/to/checkout
+(dlv) break health handler.(*Handler).Health
+(dlv) continue
+```
+
+Replace `/absolute/path/to/checkout` with your local project directory. From a third terminal, run `curl --noproxy '*' http://127.0.0.1:18880/health`. It waits while the handler is paused. At the breakpoint, run:
+
+```text
+(dlv) clear health
+(dlv) continue
+```
+
+The request completes with HTTP 200 when resumed within its timeout. The debug image sets one-hour read/write timeouts to allow breakpoint pauses. Longer pauses or client deadlines can still expire an in-flight request; send a fresh request after continuing in that case. An IDE can attach to the same headless Delve server at `127.0.0.1:12345`, with remote source directory `/src` mapped to your checkout. Stop the session with `docker stop server-debug`; rebuild the image after source or YAML changes. Supply runtime environment overrides with `docker run -e` when needed.
+
+This image includes source and development tools. It runs as UID 65532 with all capabilities dropped and Docker's default seccomp profile. Keep both host port bindings explicitly on `127.0.0.1`: the debugger allows execution inside the container and must remain private. Use the production image below for deployment.
+
+This workflow passed a host-client breakpoint/continue and HTTP health check on Linux arm64 Docker. On the tested macOS arm64 machine, native Delve launch and attach stalled at `debugserver`'s `task_for_pid`; Apple LLDB also stalled. No explicit permission denial was observed, so the host cause remains unconfirmed. The Docker workflow requires no host debugger-security changes.
+
 ## Docker
 
 ```sh
