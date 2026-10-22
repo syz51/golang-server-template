@@ -45,78 +45,26 @@ func request(e *echo.Echo, method, path, body string) *httptest.ResponseRecorder
 	return rec
 }
 
-func TestServerUserRoutes(t *testing.T) {
+func TestServerRoutes(t *testing.T) {
 	e, _ := testServer()
-
 	rec := request(e, http.MethodGet, "/health", "")
 	require.Equal(t, http.StatusOK, rec.Code)
 	var health model.HealthResponse
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &health))
+	require.Equal(t, "ok", health.Status)
 	require.Equal(t, "test-app", health.Service)
 	require.Equal(t, "1.0.0", health.Version)
-
-	const userJSON = `{"email":"john@example.com","first_name":"John","last_name":"Doe","age":25}`
-	rec = request(e, http.MethodPost, "/api/v1/users", userJSON)
-	require.Equal(t, http.StatusCreated, rec.Code, rec.Body.String())
-	var user model.User
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &user))
-	require.Equal(t, 1, user.ID)
-	require.Equal(t, "john@example.com", user.Email)
-
-	rec = request(e, http.MethodGet, "/api/v1/users/1", "")
-	require.Equal(t, http.StatusOK, rec.Code)
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &user))
-	require.Equal(t, "John", user.FirstName)
-
-	rec = request(e, http.MethodPut, "/api/v1/users/1", `{"first_name":"Jane","status":"inactive"}`)
-	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &user))
-	require.Equal(t, "Jane", user.FirstName)
-	require.Equal(t, "inactive", user.Status)
-	require.Equal(t, "john@example.com", user.Email)
-
-	rec = request(e, http.MethodGet, "/api/v1/users?page=1&per_page=1", "")
-	require.Equal(t, http.StatusOK, rec.Code)
-	var list model.UserListResponse
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &list))
-	require.Len(t, list.Users, 1)
-	require.Equal(t, model.MetaData{Page: 1, PerPage: 1, Total: 1, TotalPages: 1}, list.Meta)
-
-	rec = request(e, http.MethodDelete, "/api/v1/users/1", "")
-	require.Equal(t, http.StatusNoContent, rec.Code)
-	require.Empty(t, rec.Body.String())
-	rec = request(e, http.MethodGet, "/api/v1/users/1", "")
-	require.Equal(t, http.StatusNotFound, rec.Code)
-}
-
-func TestServerRequestErrors(t *testing.T) {
-	tests := []struct {
-		name   string
-		method string
-		path   string
-		body   string
-		err    string
-	}{
-		{"malformed create", http.MethodPost, "/api/v1/users", `{"email":`, "Invalid request payload"},
-		{"invalid create", http.MethodPost, "/api/v1/users", `{"email":"invalid"}`, "Validation failed"},
-		{"malformed update", http.MethodPut, "/api/v1/users/1", `{"age":`, "Invalid request payload"},
-		{"invalid update", http.MethodPut, "/api/v1/users/1", `{"age":-1}`, "Validation failed"},
-		{"invalid get ID", http.MethodGet, "/api/v1/users/abc", "", "Invalid user ID"},
-		{"invalid update ID", http.MethodPut, "/api/v1/users/abc", `{}`, "Invalid user ID"},
-		{"invalid delete ID", http.MethodDelete, "/api/v1/users/abc", "", "Invalid user ID"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			e, _ := testServer()
-			rec := request(e, tt.method, tt.path, tt.body)
-			require.Equal(t, http.StatusBadRequest, rec.Code, rec.Body.String())
-			var response model.ErrorResponse
-			require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
-			require.Equal(t, tt.err, response.Error)
-			if tt.err == "Validation failed" {
-				require.NotEmpty(t, response.Details["validation_errors"])
-			}
-		})
+	require.False(t, health.Timestamp.IsZero())
+	for _, route := range []struct{ method, path string }{
+		{http.MethodGet, "/api/v1/users"},
+		{http.MethodPost, "/api/v1/users"},
+		{http.MethodGet, "/api/v1/users/1"},
+		{http.MethodPut, "/api/v1/users/1"},
+		{http.MethodDelete, "/api/v1/users/1"},
+	} {
+		rec := request(e, route.method, route.path, "")
+		require.Equal(t, http.StatusNotFound, rec.Code)
+		require.JSONEq(t, `{"error":"Not Found"}`, rec.Body.String())
 	}
 }
 
@@ -147,7 +95,10 @@ func TestServerMiddlewareErrorsAndRequestLogs(t *testing.T) {
 			rec := httptest.NewRecorder()
 			e.ServeHTTP(rec, req)
 			require.Equal(t, tt.status, rec.Code)
-			require.JSONEq(t, `{"message":"`+tt.message+`"}`, rec.Body.String())
+			if tt.status == http.StatusMethodNotAllowed {
+				require.Contains(t, rec.Header().Get(echo.HeaderAllow), http.MethodGet)
+			}
+			require.JSONEq(t, `{"error":"`+tt.message+`"}`, rec.Body.String())
 			require.Equal(t, "*", rec.Header().Get(echo.HeaderAccessControlAllowOrigin))
 			requestID := rec.Header().Get(echo.HeaderXRequestID)
 			require.NotEmpty(t, requestID)
@@ -185,7 +136,8 @@ func TestServerRequestIDAndPreflight(t *testing.T) {
 	require.Equal(t, float64(http.StatusOK), entry["status"])
 	require.Equal(t, "client-request", entry["request_id"])
 
-	req = httptest.NewRequest(http.MethodOptions, "/api/v1/users", nil)
+	e.POST("/preflight", func(c *echo.Context) error { return c.NoContent(http.StatusNoContent) })
+	req = httptest.NewRequest(http.MethodOptions, "/preflight", nil)
 	req.Header.Set(echo.HeaderOrigin, "https://example.com")
 	req.Header.Set(echo.HeaderAccessControlRequestMethod, http.MethodPost)
 	rec = httptest.NewRecorder()
@@ -354,9 +306,10 @@ func TestServerBodyLimit(t *testing.T) {
 			e := newServer(cfg)
 			var logs bytes.Buffer
 			e.Logger = slog.New(slog.NewJSONHandler(&logs, nil))
-			for _, body := range []string{`{"email":"` + strings.Repeat("x", 2048) + `@example.com"}`, `{"email":"a@b.com"}` + strings.Repeat(" ", 2048)} {
+			e.POST("/body", func(c *echo.Context) error { return c.NoContent(http.StatusNoContent) })
+			for _, body := range []string{strings.Repeat("x", 2048), `{}` + strings.Repeat(" ", 2048)} {
 				logs.Reset()
-				req := httptest.NewRequest(http.MethodPost, "/api/v1/users", strings.NewReader(body))
+				req := httptest.NewRequest(http.MethodPost, "/body", strings.NewReader(body))
 				req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 				if chunked {
 					req.ContentLength = -1
@@ -365,6 +318,7 @@ func TestServerBodyLimit(t *testing.T) {
 				rec := httptest.NewRecorder()
 				e.ServeHTTP(rec, req)
 				require.Equal(t, http.StatusRequestEntityTooLarge, rec.Code, rec.Body.String())
+				require.JSONEq(t, `{"error":"Request Entity Too Large"}`, rec.Body.String())
 				require.NotEmpty(t, rec.Header().Get(echo.HeaderXRequestID))
 				var entry struct {
 					Status    int    `json:"status"`
@@ -536,16 +490,14 @@ func TestServerMalformedBodyOverTCP(t *testing.T) {
 		} {
 			t.Run(method+"/"+tc.name, func(t *testing.T) {
 				e, _ := testServer()
+				e.Match([]string{http.MethodPost, http.MethodPut}, "/body", func(c *echo.Context) error { return c.NoContent(http.StatusNoContent) })
 				server := httptest.NewServer(e)
 				defer server.Close()
 				conn, err := net.DialTimeout("tcp", server.Listener.Addr().String(), 5*time.Second)
 				require.NoError(t, err)
 				defer conn.Close()
 				require.NoError(t, conn.SetDeadline(time.Now().Add(5*time.Second)))
-				path := "/api/v1/users"
-				if method == http.MethodPut {
-					path += "/1"
-				}
+				path := "/body"
 				_, err = fmt.Fprintf(conn, "%s %s HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/json\r\nConnection: close\r\n%s\r\n%s", method, path, tc.headers, tc.body)
 				require.NoError(t, err)
 				// Signal end of input while retaining the read side for the response.
@@ -556,7 +508,7 @@ func TestServerMalformedBodyOverTCP(t *testing.T) {
 				body, err := io.ReadAll(response.Body)
 				require.NoError(t, err)
 				require.Equal(t, http.StatusBadRequest, response.StatusCode, string(body))
-				require.JSONEq(t, `{"message":"Invalid request payload"}`, string(body))
+				require.JSONEq(t, `{"error":"Invalid request payload"}`, string(body))
 				require.NotEmpty(t, response.Header.Get(echo.HeaderXRequestID))
 			})
 		}
@@ -596,6 +548,7 @@ func TestBodyLimitBoundaryOverHTTP(t *testing.T) {
 					require.Len(t, body, size)
 				} else {
 					require.Equal(t, http.StatusRequestEntityTooLarge, response.StatusCode)
+					require.JSONEq(t, `{"error":"Request Entity Too Large"}`, string(body))
 				}
 			})
 		}

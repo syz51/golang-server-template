@@ -1,8 +1,8 @@
 # Go Server Template
 
-An Echo v5 HTTP server starter with validated configuration, structured logging, request limits, graceful shutdown, tests, and a non-root Docker image. Generate a new Go module with `gonew`, then replace the demonstration API with your application.
+An Echo v5 HTTP server starter with validated configuration, structured logging, request limits, graceful shutdown, tests, and a non-root Docker image. Generate a new Go module with `gonew`, then add your application handlers and dependencies.
 
-The included users API is an **unauthenticated, in-memory demonstration**. Data disappears on restart and is not shared between instances. `/health` reports process liveness only. Add application-specific authentication, authorization, durable storage, and dependency readiness checks before using the example to serve real user data.
+`GET /health` is the only shipped route. It reports process liveness, with `status`, `service`, `version`, and `timestamp`; it does not check dependency readiness. The skeleton includes no business API, storage, model validation, or required service interface.
 
 ## Requirements and support
 
@@ -26,7 +26,7 @@ go test ./...
 go run ./cmd/server
 ```
 
-Choose your own module path, such as `github.com/your-name/my-server`. `gonew` rewrites `go.mod` and internal Go imports automatically; **do not run a second module-renaming step**. For reproducible generation, replace `@latest` with an existing tag from [Releases](https://github.com/syz51/golang-server-template/releases). The template maintainer's release process is in [RELEASING.md](RELEASING.md).
+Choose your own module path, such as `github.com/your-name/my-server`. `gonew` rewrites `go.mod` and internal Go imports automatically; **do not run a second module-renaming step**. For reproducible generation, replace `@latest` with an existing tag from [Releases](https://github.com/syz51/golang-server-template/releases) or a full commit hash. The template maintainer's release process is in [RELEASING.md](RELEASING.md).
 
 In another terminal:
 
@@ -65,7 +65,7 @@ Precedence, from highest to lowest:
 
 Each load is isolated. Loading `.env` does not change the process environment. Missing files are optional; malformed files and invalid supported settings fail startup. No configuration is read from your home directory. Configuration paths are relative to the process working directory, not the binary location.
 
-The complete file is [configs/config.yaml](configs/config.yaml), and all environment keys are in [.env.example](.env.example). Unused database and debug settings have been removed: the starter does not connect to a database.
+The complete file is [configs/config.yaml](configs/config.yaml), and all environment keys are in [.env.example](.env.example). The skeleton does not connect to a database.
 
 | Setting | Default | Environment variable |
 | --- | --- | --- |
@@ -84,41 +84,21 @@ The complete file is [configs/config.yaml](configs/config.yaml), and all environ
 | Application version | `1.0.0` | `APP_APP_VERSION` |
 | Environment label | `development` | `APP_APP_ENVIRONMENT` |
 
-Durations use Go strings such as `5s` or `1m`; byte limits and timeouts must be positive. Log levels are `debug`, `info`, `warn`, and `error`; formats are `json` and `text`. Environment labels are `development`, `staging`, and `production`. The label identifies deployment configuration; it does not add authentication or persistent storage.
+Durations use Go strings such as `5s` or `1m`; byte limits and timeouts must be positive. Log levels are `debug`, `info`, `warn`, and `error`; formats are `json` and `text`. Environment labels are `development`, `staging`, and `production`. The label identifies deployment configuration; it does not change the HTTP contract.
 
 CORS is opt-in. Supply a YAML list or comma-separated environment value, for example `APP_SERVER_CORS_ALLOWED_ORIGINS=https://app.example.com,https://admin.example.com`. IPv6 literals such as `APP_SERVER_HOST=::1` are supported without brackets.
 
 Request bodies are buffered up to the configured limit before decoding. Oversized bodies, including chunked bodies, return HTTP 413. Streaming uploads or SSE require deliberate changes to buffering and timeout policies.
 
-## Demonstration API
+## HTTP contract
 
-```sh
-curl --fail -X POST http://localhost:8080/api/v1/users \
-  -H 'Content-Type: application/json' \
-  -d '{"email":"john@example.com","first_name":"John","last_name":"Doe","age":25,"phone":"+1234567890"}'
+`GET /health` returns HTTP 200 with liveness JSON:
 
-curl --fail http://localhost:8080/api/v1/users/1
-
-curl --fail -X PUT http://localhost:8080/api/v1/users/1 \
-  -H 'Content-Type: application/json' -d '{"first_name":"Jane","phone":""}'
-
-curl --fail 'http://localhost:8080/api/v1/users?page=1&per_page=10'
-
-curl --fail -X DELETE http://localhost:8080/api/v1/users/1
+```json
+{"status":"ok","service":"golang-server-template","version":"1.0.0","timestamp":"2026-01-01T00:00:00Z"}
 ```
 
-| Route | Successful response |
-| --- | --- |
-| `GET /health` | 200; `status`, `service`, `version`, `timestamp` |
-| `POST /api/v1/users` | 201; created user |
-| `GET /api/v1/users/:id` | 200; user |
-| `PUT /api/v1/users/:id` | 200; updated user |
-| `DELETE /api/v1/users/:id` | 204; empty body |
-| `GET /api/v1/users` | 200; `users` and pagination `meta` |
-
-Updates are partial despite the example's `PUT` route. Omitted or `null` phone leaves the value unchanged; an empty string clears it. Nonempty phone values must use E164 format. Missing users return 404; duplicate emails return 409; invalid inputs return 400; unsupported request media types return 415.
-
-Pagination is ordered by ascending user ID. Defaults are page 1 and 10 users per page. `per_page` must be 1–100; invalid, empty, repeated, or overflowing pagination parameters return 400. Valid pages beyond the available users return 200 with `users: []`. Pagination is not a snapshot across concurrent writes.
+Service and version come from configuration; the timestamp is generated for each request. Unknown routes return 404, `POST /health` returns 405, and bodies above the configured limit return 413, including on missing routes. HTTP errors use `{"error":"public message"}`; internal errors are sanitized. Responses include `X-Request-ID`, preserving a supplied request ID or generating one. Keep request IDs free of secrets.
 
 ## Development and checks
 
@@ -168,11 +148,11 @@ The application starts paused. In another terminal, connect with the pinned `dlv
 ```text
 dlv connect 127.0.0.1:12345
 (dlv) config substitute-path /src /absolute/path/to/checkout
-(dlv) break health handler.(*Handler).Health
+(dlv) break health internal/handler/handler.go:15
 (dlv) continue
 ```
 
-Replace `/absolute/path/to/checkout` with your local project directory. From a third terminal, run `curl --noproxy '*' http://127.0.0.1:18880/health`. It waits while the handler is paused. At the breakpoint, run:
+Replace `/absolute/path/to/checkout` with your local project directory. The breakpoint targets the health response in `internal/handler/handler.go`; adjust its line if you edit that file. From a third terminal, run `curl --noproxy '*' http://127.0.0.1:18880/health`. It waits while the handler is paused. At the breakpoint, run:
 
 ```text
 (dlv) clear health
@@ -207,14 +187,14 @@ The process handles SIGINT and SIGTERM. Coordinate the platform stop grace perio
 
 ## Project layout and extension
 
-- `cmd/server`: composition, middleware, routes, logging, and server lifecycle.
+- `cmd/server`: explicit dependency construction, middleware, route registration, logging, and server lifecycle.
 - `internal/config`: isolated, validated runtime configuration.
-- `internal/handler`: HTTP decoding, validation, and error/status mapping.
-- `internal/model`: request/response types and validation.
-- `internal/service`: concurrency-safe demonstration business logic and storage.
+- `internal/handler`: infrastructure health handler; add application HTTP handlers here if useful.
+- `internal/model`: generic response types; add your own types as needed.
+- `internal/service` and `internal/middleware`: optional extension points.
 - `tools`: template-generation and Docker acceptance checks.
 
-To add an entity, define request/response types, implement its service, add handlers, and register routes in `setupRoutes`. Echo v5 handlers accept `*echo.Context`. Keep stored objects private and return detached values; use typed or sentinel service errors rather than matching error text. Add tests for failure paths and concurrent access. Introduce a persistence interface when your application needs a real backend, and make readiness checks reflect that backend's actual state.
+Folders are conventions, not a required application architecture. Add your own handlers and routes in `cmd/server`. When a handler needs dependencies, construct them explicitly there and pass them through its constructor; handlers should not instantiate services. Health remains independent of application services. Introduce services, interfaces, backends, and readiness checks only when your application needs them. Echo v5 handlers accept `*echo.Context`; return errors through the shared HTTP error handler to preserve the public envelope and sanitized internal failures.
 
 ## Contributing, security, and license
 

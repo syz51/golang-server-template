@@ -1,6 +1,6 @@
 # Security policy
 
-The latest published template revision is the maintenance target. Generated projects are independent copies and do not receive fixes automatically. Consumers should monitor upstream changes, update their dependencies, and review applicable fixes. Older template releases have no separate backport commitment.
+The latest upstream template revision is the maintenance target. Generated projects are independent copies and do not receive fixes automatically. Consumers should monitor upstream changes, update their dependencies, and review applicable fixes. Older template releases have no separate backport commitment.
 
 ## Reporting a vulnerability
 
@@ -10,7 +10,7 @@ Include affected revisions, the relevant configuration, a minimal reproduction, 
 
 ## Deployment scope
 
-The user API is an unauthenticated in-memory demonstration. Do not deploy it for real personal data without application-specific authentication, authorization, persistence, and operational controls. `/health` is liveness only and does not prove dependency readiness.
+`GET /health` is the only shipped route and reports liveness, not dependency readiness. Consumers own the authentication, authorization, data handling, and operational controls needed by routes they add. HTTP errors use a public `error` message; keep internal details and secrets out of responses and request IDs.
 
 CORS is disabled by default; configure explicit origins only when needed. Terminate TLS through an appropriate deployment setup, protect management/debug access, provide secrets at runtime, and align ingress limits and stop grace periods with the server configuration. Never expose Delve outside the development machine.
 

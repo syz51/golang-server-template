@@ -17,7 +17,9 @@ go run ./tools/containercheck
 
 Run the pinned vulnerability scanner configured in `.github/workflows/validate.yml` and explain any advisory's reachability rather than suppressing findings without evidence. If dependencies change, run `go mod tidy` and include both module files. Keep tool versions, example configuration, README defaults, and CI consistent.
 
-The template acceptance check generates from the current working tree, including relevant uncommitted files. Never put credentials or personal environment files in fixtures. Container checks create and clean up their own images and containers.
+Keep the shipped HTTP surface limited to `GET /health`; do not add business API demonstrations or require consumers to implement a service/backend. Wire added dependencies explicitly in `cmd/server`. Cover the shared error envelope, sanitized internal errors, missing routes, method rejection, request IDs, and body limits with focused tests.
+
+The template acceptance check recursively generates from the current working tree, including relevant uncommitted files. Never put credentials or personal environment files in fixtures. It verifies module/import rewriting, race tests, vet, build, skeleton HTTP behavior, and SIGTERM exit. Container checks preserve production image, non-root, filesystem, HTTP, and shutdown checks and clean up their own images and containers.
 
 Report reproducible bugs with your Go version, OS/architecture, commands, expected behavior, and sanitized output. Follow [SECURITY.md](SECURITY.md) for vulnerabilities. Do not include secrets in issues, pull requests, logs, or screenshots.
 

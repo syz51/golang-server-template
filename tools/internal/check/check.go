@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
 	"os"
 	"os/exec"
@@ -40,14 +41,22 @@ func Cleanup(root string) {
 	}
 }
 
+// Smoke checks the shipped skeleton with the default 1 MiB request limit.
+// It needs no application routes or test-only endpoints.
 func Smoke(base string) error {
 	client := &http.Client{Timeout: 3 * time.Second}
-	request := func(method, path, body string, status int) ([]byte, error) {
+	request := func(method, path, body, requestID string, status int, chunked bool) ([]byte, error) {
 		req, err := http.NewRequest(method, base+path, strings.NewReader(body))
 		if err != nil {
 			return nil, err
 		}
 		req.Header.Set("Content-Type", "application/json")
+		if requestID != "" {
+			req.Header.Set("X-Request-ID", requestID)
+		}
+		if chunked {
+			req.ContentLength = -1
+		}
 		res, err := client.Do(req)
 		if err != nil {
 			return nil, err
@@ -57,15 +66,37 @@ func Smoke(base string) error {
 		if err != nil {
 			return nil, err
 		}
+		fail := func(message string) ([]byte, error) { return nil, fmt.Errorf("%s %s: %s", method, path, message) }
 		if res.StatusCode != status {
-			return nil, fmt.Errorf("%s %s: status %d, want %d: %s", method, path, res.StatusCode, status, data)
+			return fail(fmt.Sprintf("status %d, want %d: %s", res.StatusCode, status, data))
+		}
+		mediaType, _, err := mime.ParseMediaType(res.Header.Get("Content-Type"))
+		if err != nil || mediaType != "application/json" {
+			return fail("expected application/json response")
+		}
+		gotID := res.Header.Get("X-Request-ID")
+		if strings.TrimSpace(gotID) == "" {
+			return fail("missing request ID")
+		}
+		if requestID != "" && gotID != requestID {
+			return fail("request ID was not preserved")
+		}
+		if status >= 400 {
+			var envelope map[string]json.RawMessage
+			if err := json.Unmarshal(data, &envelope); err != nil {
+				return fail("invalid JSON error envelope")
+			}
+			var message string
+			if len(envelope) != 1 || json.Unmarshal(envelope["error"], &message) != nil || strings.TrimSpace(message) == "" {
+				return fail(fmt.Sprintf("expected error-only public message: %s", data))
+			}
 		}
 		return data, nil
 	}
 	deadline := time.Now().Add(30 * time.Second)
 	var health []byte
 	for {
-		data, err := request("GET", "/health", "", 200)
+		data, err := request(http.MethodGet, "/health", "", "", http.StatusOK, false)
 		if err == nil {
 			health = data
 			break
@@ -80,58 +111,31 @@ func Smoke(base string) error {
 		Timestamp                time.Time
 	}
 	if err := json.Unmarshal(health, &h); err != nil {
-		return err
+		return fmt.Errorf("health JSON: %w", err)
 	}
-	if h.Status != "ok" || h.Service == "" || h.Version == "" || h.Timestamp.IsZero() {
+	if h.Status != "ok" || strings.TrimSpace(h.Service) == "" || strings.TrimSpace(h.Version) == "" || h.Timestamp.IsZero() {
 		return fmt.Errorf("invalid health fields: %s", health)
 	}
-	body := `{"email":"smoke@example.com","first_name":"Smoke","last_name":"Tester","age":25}`
-	data, err := request("POST", "/api/v1/users", body, 201)
-	if err != nil {
-		return err
-	}
-	var user struct{ ID int }
-	if err = json.Unmarshal(data, &user); err != nil {
-		return err
-	}
-	if user.ID <= 0 {
-		return fmt.Errorf("invalid created user: %s", data)
-	}
-	path := fmt.Sprintf("/api/v1/users/%d", user.ID)
+	oversized := strings.Repeat("x", (1<<20)+1)
 	for _, tc := range []struct {
-		method, path, body string
-		status             int
-		firstName          string
+		method, path, body, requestID string
+		status                        int
+		chunked                       bool
 	}{
-		{"GET", path, "", 200, "Smoke"}, {"GET", "/api/v1/users", "", 200, ""},
-		{"POST", "/api/v1/users", body, 409, ""},
-		{"PUT", path, `{"first_name":"Updated"}`, 200, "Updated"},
-		{"GET", path, "", 200, "Updated"},
-		{"PUT", "/api/v1/users/2147483647", `{"first_name":"Missing"}`, 404, ""},
-		{"POST", "/api/v1/users", `{"padding":"` + strings.Repeat("x", (1<<20)+1) + `"}`, 413, ""},
-		{"DELETE", path, "", 204, ""}, {"GET", path, "", 404, ""},
+		{http.MethodGet, "/health", "", "smoke-health", http.StatusOK, false},
+		{http.MethodGet, "/", "", "", http.StatusNotFound, false},
+		{http.MethodGet, "/does-not-exist", "", "smoke-missing", http.StatusNotFound, false},
+		{http.MethodGet, "/api/v1/users", "", "", http.StatusNotFound, false},
+		{http.MethodPost, "/api/v1/users", `{}`, "", http.StatusNotFound, false},
+		{http.MethodGet, "/api/v1/users/1", "", "", http.StatusNotFound, false},
+		{http.MethodPost, "/health", "", "smoke-method", http.StatusMethodNotAllowed, false},
+		{http.MethodGet, "/health", oversized, "smoke-limit", http.StatusRequestEntityTooLarge, false},
+		{http.MethodPost, "/does-not-exist", oversized, "smoke-chunked", http.StatusRequestEntityTooLarge, true},
 	} {
-		data, err := request(tc.method, tc.path, tc.body, tc.status)
-		if err != nil {
+		if _, err := request(tc.method, tc.path, tc.body, tc.requestID, tc.status, tc.chunked); err != nil {
 			return err
 		}
-		if tc.status == 200 && tc.path == path {
-			var got struct {
-				ID        int    `json:"id"`
-				Email     string `json:"email"`
-				FirstName string `json:"first_name"`
-			}
-			if err := json.Unmarshal(data, &got); err != nil {
-				return err
-			}
-			if got.ID != user.ID || got.Email != "smoke@example.com" || got.FirstName == "" {
-				return fmt.Errorf("invalid user response: %s", data)
-			}
-			if got.FirstName != tc.firstName {
-				return fmt.Errorf("%s %s: first_name %q, want %q: %s", tc.method, tc.path, got.FirstName, tc.firstName, data)
-			}
-		}
 	}
-	fmt.Println("health and CRUD smoke passed")
+	fmt.Println("skeleton health, routes, errors, request IDs and body limits passed")
 	return nil
 }

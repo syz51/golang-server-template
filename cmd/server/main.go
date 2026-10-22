@@ -15,7 +15,6 @@ import (
 
 	"github.com/syz51/golang-server-template/internal/config"
 	"github.com/syz51/golang-server-template/internal/handler"
-	"github.com/syz51/golang-server-template/internal/middleware"
 
 	"github.com/labstack/echo/v5"
 	echomiddleware "github.com/labstack/echo/v5/middleware"
@@ -82,6 +81,7 @@ func serverStartConfig(cfg *config.Config) echo.StartConfig {
 
 func newServer(cfg *config.Config) *echo.Echo {
 	e := echo.New()
+	e.HTTPErrorHandler = handler.HTTPErrorHandler
 	e.Logger = newLogger(cfg.Logger, os.Stderr)
 
 	// Add middleware
@@ -92,13 +92,9 @@ func newServer(cfg *config.Config) *echo.Echo {
 		e.Use(echomiddleware.CORS(cfg.Server.CORSAllowedOrigins...))
 	}
 	e.Use(bodyLimit(cfg.Server.MaxBodyBytes))
-	e.Use(middleware.Config(cfg))
-
-	// Initialize handlers
-	h := handler.New(cfg)
 
 	// Routes
-	setupRoutes(e, h)
+	setupRoutes(e, cfg.App.Name, cfg.App.Version)
 	return e
 }
 
@@ -141,18 +137,6 @@ func startServer(ctx context.Context, e *echo.Echo, sc echo.StartConfig) error {
 	return nil
 }
 
-func setupRoutes(e *echo.Echo, h *handler.Handler) {
-	// Health check
-	e.GET("/health", h.Health)
-
-	// API v1 group
-	api := e.Group("/api/v1")
-
-	// User routes
-	users := api.Group("/users")
-	users.POST("", h.CreateUser)
-	users.GET("/:id", h.GetUser)
-	users.PUT("/:id", h.UpdateUser)
-	users.DELETE("/:id", h.DeleteUser)
-	users.GET("", h.ListUsers)
+func setupRoutes(e *echo.Echo, name, version string) {
+	e.GET("/health", handler.Health(name, version))
 }
